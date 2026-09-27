@@ -1,0 +1,38 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: card
+      POSTGRES_USER: card
+      POSTGRES_PASSWORD: card
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U card -d card"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Enabled in step 02 (docs/specs/02-platform-foundation.md)
+  # temporal:
+  #   image: temporalio/temporal:1.9.1
+  #   command:
+  #     - server
+  #     - start-dev
+  #     - --ip
+  #     - "0.0.0.0"
+  #     - --ui-ip
+  #     - "0.0.0.0"
+  #     - --db-filename
+  #     - /home/temporal/temporal.db
+  #   ports:
+  #     - "7233:7233"
+  #     - "8233:8233"
+  #   volumes:
+  #     - temporal_data:/home/temporal
+
+volumes:
+  postgres_data:
+  # temporal_data:

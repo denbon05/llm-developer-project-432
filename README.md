@@ -1,45 +1,69 @@
-# ИИ-генератор карточки товара
+# AI Product Card Generator
 
 
 [![hexlet-check](https://github.com/denbon05/llm-developer-project-432/actions/workflows/hexlet-check.yml/badge.svg)](https://github.com/denbon05/llm-developer-project-432/actions)
 
-Соберите бэкенд-сервис, который принимает документы поставщиков в форматах pdf, docx и
-xlsx, строит по ним поисковый индекс и генерирует черновик карточки товара — с
-указанием источников, списком недостающих данных и уровнем уверенности. По пути
-освоите LLM-клиент с ретраями, строгий контракт результата на Pydantic, разбор
-офисных документов и чанкинг, локальные эмбеддинги с pgvector и гибридный поиск,
-цитирование с проверкой источников, учёт стоимости вызовов, метрики генерации и
-защиту от инъекций через документы и утечек персональных данных.
+Build a backend service that accepts supplier documents in pdf, docx, and
+xlsx formats, builds a search index from them, and generates a product card draft —
+with source citations, a list of missing data, and a confidence level. Along the way
+you will learn an LLM client with retries, a strict Pydantic result contract, parsing
+of office documents and chunking, local embeddings with pgvector and hybrid search,
+citation with source verification, call cost tracking, generation metrics, and
+protection against document-based injections and personal data leaks.
 
-Учебный проект Хекслета: https://ru.hexlet.io/programs/llm-developer
+A Hexlet learning project: https://ru.hexlet.io/programs/llm-developer
 
 
-## Стек
+## Stack
 
 - Python
 
-## Установка
+## Installation
 
-<!-- Опишите установку: клонирование, зависимости, переменные окружения -->
+Prerequisites:
+
+- [Docker](https://docs.docker.com/get-docker/) with Compose v2
+- [uv](https://docs.astral.sh/uv/getting-started/installation/). It installs
+  Python 3.12 from `.python-version` if you don't have it.
 
 ```bash
 git clone https://github.com/denbon05/llm-developer-project-432.git
 cd llm-developer-project-432
+cp .env.example .env    # every variable is documented there; defaults work locally
+make install            # create .venv and install locked dependencies
+make up                 # start PostgreSQL (pgvector); stays attached to show logs
 ```
 
-## Использование
+## Usage
 
-<!-- Добавьте примеры запуска и запись asciinema — именно это смотрит работодатель -->
+In a second terminal:
+
+```bash
+make run                # API on http://localhost:8000 with auto-reload
+```
+
+```bash
+curl -s localhost:8000/health/live
+# {"status":"ok"}
+```
+
+Interactive API docs are served at <http://localhost:8000/docs>.
+
+| Command | Does |
+|---------|------|
+| `make up` / `make down` | start / stop the infrastructure containers |
+| `make run` | run the API |
+| `make lint` | run ruff |
 
 ---
 
 <details>
-<summary>Автоматические тесты Хекслета</summary>
+<summary>Hexlet automated tests</summary>
 
-Тесты запускаются на каждый коммит. За запуск отвечает файл `.github/workflows/hexlet-check.yml` — не удаляйте и не переименовывайте ни его, ни репозиторий.
+Tests run on every commit. They are started by `.github/workflows/hexlet-check.yml` — do not delete or rename that file or the repository.
 
 </details>
 
-## О Хекслете
+## About Hexlet
 
-[Хекслет](https://ru.hexlet.io/) — школа программирования: авторские программы обучения с практикой, поддержкой наставников и реальными проектами, которые остаются в резюме. Этот репозиторий — один из таких проектов.
+[Hexlet](https://ru.hexlet.io/) is a programming school: original learning programs with practice, mentor support, and real projects that stay on your résumé. This repository is one of those projects.

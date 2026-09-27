@@ -1,0 +1,37 @@
+[project]
+name = "product-card-ai"
+version = "0.1.0"
+description = "Agentic product-card generation API"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "pydantic",
+    "pydantic-settings",
+    "structlog",
+]
+
+[dependency-groups]
+dev = [
+    "ruff",
+]
+
+[tool.uv]
+package = false
+
+[tool.basedpyright]
+venvPath = "."
+venv = ".venv"
+typeCheckingMode = "standard"
+
+[tool.ruff]
+target-version = "py312"
+src = ["app"]
+line-length = 80
+
+[tool.ruff.lint]
+extend-select = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
