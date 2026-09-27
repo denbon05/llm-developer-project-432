@@ -412,7 +412,7 @@ error, makes the workflow do three things:
 
 ```bash
 make up       # terminal 1 (infrastructure logs)
-make migrate  # terminal 2, once
+make migrate-up  # terminal 2, once
 make run      # terminal 2 (API)
 make worker   # terminal 3 (Temporal worker)
 curl -s -X POST localhost:8000/api/v1/jobs -H 'Content-Type: application/json' \

@@ -20,9 +20,8 @@ and queries run through an **asyncpg** pool. All SQL lives in `repositories/`.
   sections. They are append-only, and reviewers read them as they are. Nothing
   is generated from Python models, so no Python model mirrors the schema.
 - **dbmate is a dev dependency (`dbmate-bin`) pinned in `uv.lock`.** A fresh
-  clone needs no global tools. Because nothing needs a host `pg_dump`,
-  `make schema-dump` produces the schema snapshot from inside the database
-  container.
+  clone needs no global tools. Migration files under `db/migrations/` are the
+  schema source of truth.
 - **One `DATABASE_URL`** in plain `postgres://` form serves both dbmate and
   asyncpg.
 - **Repositories map rows to Pydantic models explicitly.** The asyncpg pool

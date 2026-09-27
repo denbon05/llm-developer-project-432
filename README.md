@@ -30,31 +30,45 @@ Prerequisites:
 git clone https://github.com/denbon05/llm-developer-project-432.git
 cd llm-developer-project-432
 cp .env.example .env    # every variable is documented there; defaults work locally
-make install            # create .venv and install locked dependencies
-make up                 # start PostgreSQL (pgvector); stays attached to show logs
+make install
+make up                 # stays in this terminal and streams logs
 ```
-
-## Usage
 
 In a second terminal:
 
 ```bash
-make run                # API on http://localhost:8000 with auto-reload
+make migrate-up
+```
+
+## Usage
+
+The API starts even if the database isn't up yet. Until it is, `/health/ready`
+and any endpoint that needs the database answer 503.
+
+```bash
+make run
 ```
 
 ```bash
 curl -s localhost:8000/health/live
 # {"status":"ok"}
+curl -s localhost:8000/health/ready
+# {"status":"ok","checks":{"database":"ok","vector":"0.8.6"}}
 ```
 
-Interactive API docs are served at <http://localhost:8000/docs>.
+Interactive API docs are served at <http://localhost:8000/docs>. The Temporal
+UI is at <http://localhost:8233>.
 
 | Command | Does |
 |---------|------|
-| `make up` / `make down` | start / stop the infrastructure containers |
-| `make run` | run the API |
-| `make lint` | run ruff |
-
+| `make install` | create `.venv` and install locked dependencies |
+| `make up` / `make down` | start PostgreSQL (pgvector) and Temporal / stop them |
+| `make run` | run the API on http://localhost:8000 with auto-reload |
+| `make migrate-up` | apply pending migrations from `db/migrations/` (safe to repeat) |
+| `make migrate-status` / `make migrate-rollback` | list applied and pending migrations / roll back the latest one |
+| `make migration name=<slug>` | create a new migration file |
+| `make lint` / `make typecheck` / `make test` | run ruff / basedpyright / pytest |
+| `make check` | run lint, typecheck and test |
 ---
 
 <details>

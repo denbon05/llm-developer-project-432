@@ -15,24 +15,29 @@ services:
       timeout: 5s
       retries: 5
 
-  # Enabled in step 02 (docs/specs/02-platform-foundation.md)
-  # temporal:
-  #   image: temporalio/temporal:1.9.1
-  #   command:
-  #     - server
-  #     - start-dev
-  #     - --ip
-  #     - "0.0.0.0"
-  #     - --ui-ip
-  #     - "0.0.0.0"
-  #     - --db-filename
-  #     - /home/temporal/temporal.db
-  #   ports:
-  #     - "7233:7233"
-  #     - "8233:8233"
-  #   volumes:
-  #     - temporal_data:/home/temporal
+  temporal:
+    image: temporalio/temporal:1.9.1
+    command:
+      - server
+      - start-dev
+      - --ip
+      - "0.0.0.0"
+      - --ui-ip
+      - "0.0.0.0"
+      # Keeps workflow history across restarts; the default is in memory.
+      - --db-filename
+      - /home/temporal/temporal.db
+    ports:
+      - "7233:7233"
+      - "8233:8233"
+    volumes:
+      - temporal_data:/home/temporal
+    healthcheck:
+      test: ["CMD", "temporal", "operator", "cluster", "health"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
 volumes:
   postgres_data:
-  # temporal_data:
+  temporal_data:

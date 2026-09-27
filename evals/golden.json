@@ -1,0 +1,28 @@
+{
+  "cases": [
+    {
+      "id": "fan_kp_2.pdf",
+      "note": "The price table stays, and the phone, emails, TIN 7700000707, and OGRN are masked."
+    },
+    {
+      "id": "fan_passport_fan_40.pdf",
+      "note": "FAN-40 is 40 W, and the header that repeats on both pages is dropped."
+    },
+    {
+      "id": "fan_passport_fan_45.pdf",
+      "note": "FAN-45 is 45 W, and the missing package contents stay missing."
+    },
+    {
+      "id": "fan_spec_1.xlsx",
+      "note": "The header stays on row 1, and SKUs FAN-35, FAN-40, and FAN-45 stay unchanged."
+    },
+    {
+      "id": "vacuum_passport_vcs_180.pdf",
+      "note": "Power is 500 W, not the 180 in SKU VCS-180."
+    },
+    {
+      "id": "vacuum_spec_1.xlsx",
+      "note": "The header stays on row 1, and the VCS-180 power cell stays 500."
+    }
+  ]
+}

@@ -10,10 +10,16 @@ dependencies = [
     "pydantic",
     "pydantic-settings",
     "structlog",
+    "asyncpg",
 ]
 
 [dependency-groups]
 dev = [
+    "basedpyright",
+    "dbmate-bin",
+    "httpx",
+    "pytest",
+    "pytest-asyncio",
     "ruff",
 ]
 
@@ -35,3 +41,9 @@ extend-select = ["E501"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["app"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"

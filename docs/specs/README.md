@@ -12,7 +12,7 @@ Architecture decisions live in [`docs/adr/`](../adr/). Domain vocabulary lives i
 | # | Spec | Scope | Status |
 |---|------|-------|--------|
 | 01 | [Product overview](01-product-overview.md) | Problem, promises, principles, system shape | accepted |
-| 02 | [Platform foundation](02-platform-foundation.md) | Postgres + pgvector, Temporal, migrations, pool, health, tests, CI | draft |
+| 02 | [Platform foundation](02-platform-foundation.md) | Postgres + pgvector, Temporal, migrations, pool, health, tests, CI | accepted |
 | 03 | [Generation pipeline](03-generation-pipeline.md) | LLM client, three-role pipeline, jobs, durable workflow, human approval | draft |
 | 04 | Structured output | Strict card contract, output repair, targeted field fixes, confidence | planned |
 | 05 | Document ingestion | pdf/docx/xlsx parsing, normalisation, chunking, document states | planned |
