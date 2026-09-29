@@ -43,7 +43,7 @@
 
 ## Git
 
-- One branch and one pull request per step (`feat/NN-<slug>`). The PR links its
-  spec.
+- One commit per step on `main`, with the message `feat: <title> (step NN)`.
+  The commit message references the step's spec.
 - Commit messages use Conventional Commits.
 - Never edit or delete `.github/workflows/hexlet-check.yml`.

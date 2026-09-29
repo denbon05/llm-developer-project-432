@@ -22,9 +22,15 @@ A Hexlet learning project: https://ru.hexlet.io/programs/llm-developer
 
 Prerequisites:
 
-- [Docker](https://docs.docker.com/get-docker/) with Compose v2
+- [Docker](https://docs.docker.com/get-docker/) with Compose v2. It must be
+  running for `make up` and for `make test`, which starts disposable
+  PostgreSQL containers. The first `make test` also downloads Temporal's test
+  server.
 - [uv](https://docs.astral.sh/uv/getting-started/installation/). It installs
   Python 3.12 from `.python-version` if you don't have it.
+- An OpenAI-compatible model server, such as [LM Studio](https://lmstudio.ai/)
+  at `http://localhost:1234/v1` with the model from `LLM_MODEL` loaded. Only
+  card generation needs it; tests never do.
 
 ```bash
 git clone https://github.com/denbon05/llm-developer-project-432.git
@@ -42,19 +48,41 @@ make migrate-up
 
 ## Usage
 
-The API starts even if the database isn't up yet. Until it is, `/health/ready`
-and any endpoint that needs the database answer 503.
+The API needs the database up: it checks it at startup and exits with
+`database unavailable` if it can't connect. The worker starts without it; an
+activity that finds the database down fails, and Temporal retries it a few
+times before the job fails. The worker needs Temporal at startup. The API
+starts without Temporal; endpoints that need it answer 503 until it is up.
 
 ```bash
-make run
+make run      # API, second terminal
+make worker   # Temporal worker, third terminal
 ```
 
 ```bash
 curl -s localhost:8000/health/live
 # {"status":"ok"}
 curl -s localhost:8000/health/ready
-# {"status":"ok","checks":{"database":"ok","vector":"0.8.6"}}
+# {"status":"ok","checks":{"database":"ok","vector":"0.8.6","temporal":"ok"}}
 ```
+
+Generate a card draft as a job, then approve it:
+
+```bash
+curl -s -X POST localhost:8000/api/v1/jobs -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: demo-1' \
+  -d '{"supplier_text": "Immersion blender MixerPro 800. Power 800 W, 2 speeds."}'
+# {"id":"<id>","status":"pending"}
+curl -s localhost:8000/api/v1/jobs/<id>            # poll until "awaiting_approval" or "needs_review"
+curl -s -X POST localhost:8000/api/v1/jobs/<id>/approve
+# or: curl -s -X POST localhost:8000/api/v1/jobs/<id>/reject \
+#       -H 'Content-Type: application/json' -d '{"reason": "Wrong power"}'
+curl -s localhost:8000/api/v1/jobs/<id>/workflow   # Temporal's view of the job
+```
+
+Repeating a request with the same `Idempotency-Key` returns the same job.
+`POST /api/v1/cards` with the same body runs the pipeline inside the request
+and returns the draft directly; with a local model it can take minutes.
 
 Interactive API docs are served at <http://localhost:8000/docs>. The Temporal
 UI is at <http://localhost:8233>.
@@ -64,10 +92,11 @@ UI is at <http://localhost:8233>.
 | `make install` | create `.venv` and install locked dependencies |
 | `make up` / `make down` | start PostgreSQL (pgvector) and Temporal / stop them |
 | `make run` | run the API on http://localhost:8000 with auto-reload |
+| `make worker` | run the Temporal worker that carries out jobs |
 | `make migrate-up` | apply pending migrations from `db/migrations/` (safe to repeat) |
 | `make migrate-status` / `make migrate-rollback` | list applied and pending migrations / roll back the latest one |
 | `make migration name=<slug>` | create a new migration file |
-| `make lint` / `make typecheck` / `make test` | run ruff / basedpyright / pytest |
+| `make lint` / `make typecheck` / `make test` | run ruff / basedpyright / pytest (needs Docker running) |
 | `make check` | run lint, typecheck and test |
 ---
 

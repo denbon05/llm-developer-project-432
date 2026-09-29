@@ -2,7 +2,7 @@
 
 This project uses spec-driven development: a step's spec is written and reviewed
 before any code for it. The spec is the source of truth. If an implementation
-has to deviate, the spec is updated in the same pull request.
+has to deviate, the spec is updated in the same change.
 
 Architecture decisions live in [`docs/adr/`](../adr/). Domain vocabulary lives in
 [`CONTEXT.md`](../../CONTEXT.md).
@@ -13,7 +13,7 @@ Architecture decisions live in [`docs/adr/`](../adr/). Domain vocabulary lives i
 |---|------|-------|--------|
 | 01 | [Product overview](01-product-overview.md) | Problem, promises, principles, system shape | accepted |
 | 02 | [Platform foundation](02-platform-foundation.md) | Postgres + pgvector, Temporal, migrations, pool, health, tests, CI | accepted |
-| 03 | [Generation pipeline](03-generation-pipeline.md) | LLM client, three-role pipeline, jobs, durable workflow, human approval | draft |
+| 03 | [Generation pipeline](03-generation-pipeline.md) | LLM client, three-role pipeline, jobs, durable workflow, human approval | accepted |
 | 04 | Structured output | Strict card contract, output repair, targeted field fixes, confidence | planned |
 | 05 | Document ingestion | pdf/docx/xlsx parsing, normalisation, chunking, document states | planned |
 | 06 | Embeddings and search | Local embeddings, pgvector, keyword and hybrid search | planned |

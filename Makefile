@@ -12,6 +12,9 @@ install:
 run:
 	uv run uvicorn app.main:create_app --factory --reload
 
+worker:
+	uv run python -m app.temporal.worker
+
 migrate-up:
 	$(DBMATE) up
 
@@ -27,6 +30,9 @@ migration:
 lint:
 	uv run ruff check
 	uv run ruff format --check
+
+format:
+	uv run ruff format
 
 typecheck:
 	uv run basedpyright

@@ -11,6 +11,9 @@ dependencies = [
     "pydantic-settings",
     "structlog",
     "asyncpg",
+    "openai",
+    "tenacity",
+    "temporalio",
 ]
 
 [dependency-groups]
@@ -18,9 +21,11 @@ dev = [
     "basedpyright",
     "dbmate-bin",
     "httpx",
+    "httpx2",
     "pytest",
     "pytest-asyncio",
     "ruff",
+    "testcontainers[postgres]",
 ]
 
 [tool.uv]

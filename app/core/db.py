@@ -1,13 +1,23 @@
+import asyncio
 import json
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 import asyncpg
 from asyncpg.pool import PoolConnectionProxy
 
 from app.core.config import Settings
+from app.core.errors import UnavailableError
 
-DATABASE_UNAVAILABLE_MESSAGE = "database unavailable"
+HEALTH_CHECK_TIMEOUT_S = 2.0
+# Refused sockets, a server that is still starting up, and a pooled
+# connection that died with the server. InterfaceError stays out: asyncpg
+# also raises it for programming errors, such as a wrong argument count.
+CONNECTION_ERRORS = (
+    OSError,
+    asyncpg.CannotConnectNowError,
+    asyncpg.PostgresConnectionError,
+)
 
 _pool: asyncpg.Pool | None = None
 
@@ -16,8 +26,16 @@ class PoolNotOpenError(RuntimeError):
     """Raised when the pool is used before it is opened"""
 
 
-class DatabaseUnavailableError(RuntimeError):
-    """Raised when a database connection is unavailable"""
+class DatabaseUnavailableError(UnavailableError):
+    """Raised when the database cannot be reached"""
+
+    message = "database unavailable"
+
+
+class VectorExtensionMissingError(UnavailableError):
+    """Raised when the vector extension is not installed"""
+
+    message = "vector extension missing"
 
 
 async def register_codecs(conn: asyncpg.Connection) -> None:
@@ -59,29 +77,40 @@ def pool() -> asyncpg.Pool:
 
 
 @asynccontextmanager
-async def connection() -> AsyncIterator[PoolConnectionProxy]:
+async def connection() -> AsyncGenerator[PoolConnectionProxy]:
     """Take a connection from the pool and return it on exit"""
     try:
         conn = await pool().acquire()
-    # Refused sockets, connection loss, and a server that is still starting up.
-    except (
-        OSError,
-        asyncpg.CannotConnectNowError,
-        asyncpg.PostgresConnectionError,
-    ) as error:
-        raise DatabaseUnavailableError(DATABASE_UNAVAILABLE_MESSAGE) from error
+    except CONNECTION_ERRORS as error:
+        raise DatabaseUnavailableError() from error
     try:
         yield conn
-    except asyncpg.PostgresConnectionError as error:
-        raise DatabaseUnavailableError(DATABASE_UNAVAILABLE_MESSAGE) from error
+    except CONNECTION_ERRORS as error:
+        raise DatabaseUnavailableError() from error
     finally:
         await pool().release(conn)
 
 
-async def fetch_vector_version() -> str | None:
-    """Return the installed vector extension version, or None if missing"""
+async def check_database() -> None:
+    """Take one connection from the pool and return it"""
+    async with connection():
+        pass
+
+
+async def fetch_vector_version() -> str:
+    """Return the installed vector extension version"""
     # The readiness probe is the one place outside repositories/ that runs SQL.
-    async with connection() as conn:
-        return await conn.fetchval(
-            "SELECT extversion FROM pg_extension WHERE extname = 'vector'"
-        )
+    try:  # quick check
+        async with (
+            asyncio.timeout(HEALTH_CHECK_TIMEOUT_S),
+            connection() as conn,
+        ):
+            version = await conn.fetchval(
+                "SELECT extversion FROM pg_extension WHERE extname = 'vector'"
+            )
+    # A database too slow to answer counts as unavailable.
+    except TimeoutError as error:
+        raise DatabaseUnavailableError() from error
+    if version is None:
+        raise VectorExtensionMissingError()
+    return version
