@@ -23,7 +23,7 @@ A Hexlet learning project: https://ru.hexlet.io/programs/llm-developer
 Prerequisites:
 
 - [Docker](https://docs.docker.com/get-docker/) with Compose v2. It must be
-  running for `make up` and for `make test`, which starts disposable
+  running for `make infra` and for `make test`, which starts disposable
   PostgreSQL containers. The first `make test` also downloads Temporal's test
   server.
 - [uv](https://docs.astral.sh/uv/getting-started/installation/). It installs
@@ -37,7 +37,7 @@ git clone https://github.com/denbon05/llm-developer-project-432.git
 cd llm-developer-project-432
 cp .env.example .env    # every variable is documented there; defaults work locally
 make install
-make up                 # stays in this terminal and streams logs
+make infra              # stays in this terminal and streams logs
 ```
 
 In a second terminal:
@@ -90,7 +90,7 @@ UI is at <http://localhost:8233>.
 | Command | Does |
 |---------|------|
 | `make install` | create `.venv` and install locked dependencies |
-| `make up` / `make down` | start PostgreSQL (pgvector) and Temporal / stop them |
+| `make infra` / `make down` | start PostgreSQL (pgvector) and Temporal / stop them |
 | `make run` | run the API on http://localhost:8000 with auto-reload |
 | `make worker` | run the Temporal worker that carries out jobs |
 | `make migrate-up` | apply pending migrations from `db/migrations/` (safe to repeat) |

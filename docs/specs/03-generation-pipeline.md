@@ -2,19 +2,35 @@
 
 **Status:** accepted
 
-## Goal
+## Context
 
-Turn supplier text into a card draft with a three-role pipeline: **extractor →
-generator → critic**, where the critic can send the draft back for a bounded
-number of revisions. Every model call goes through one LLM client boundary.
+Supplier text must become a card draft without tying durable work to an HTTP
+request or exposing provider-specific model behavior to the application.
+PostgreSQL is the source of job status; Temporal owns execution history.
 
-The pipeline is available in two ways:
+The design has two entry points over one generation algorithm:
 
-- a **synchronous preview** endpoint for previews and debugging. It holds the
-  connection for the whole pipeline, minutes with a local model;
-- **asynchronous jobs**, each backed by a durable Temporal workflow that
-  survives worker restarts and waits, for as long as needed, for a human to
-  approve or reject the result.
+- synchronous preview for development and diagnostics;
+- asynchronous jobs for durable generation and human decisions.
+
+## Requirements
+
+- **GEN-1 — Pipeline:** extract facts once, then run at most three
+  generate-and-critique rounds.
+- **GEN-2 — Grounding:** a draft may use only facts extracted from the input.
+- **GEN-3 — Model boundary:** every model call goes through `app/llm/client.py`;
+  provider types and errors do not cross that boundary.
+- **GEN-4 — Durable jobs:** asynchronous generation survives worker restarts
+  without repeating completed activities.
+- **GEN-5 — Idempotent submission:** repeating a request with the same
+  idempotency key and body returns the same job. Reusing the key for another
+  body is rejected.
+- **GEN-6 — Status ownership:** PostgreSQL is the client-visible status of
+  record. Temporal history is operational state.
+- **GEN-7 — Human decision:** a generated draft waits without holding a worker
+  or database connection; the first approve or reject decision wins.
+- **GEN-8 — Testability:** automated tests require neither a model server nor
+  the developer's Compose database.
 
 ## Non-goals
 
@@ -28,7 +44,23 @@ The pipeline is available in two ways:
 - A message queue. Temporal carries all background work
   ([ADR 0001](../adr/0001-temporal-durable-execution.md)).
 
-## Contracts
+## Design
+
+### Component flow
+
+```text
+POST /cards ───────────────▶ pipeline service ───────────────▶ LLM client
+
+POST /jobs ─▶ jobs repository ─▶ Temporal workflow
+                                      │
+                                      ├─▶ generation activities ─▶ LLM client
+                                      └─▶ status activity ───────▶ jobs repository
+```
+
+The synchronous service and Temporal workflow implement the same state
+transitions separately. Workflow code stays deterministic; the shared
+constants and tests keep both paths aligned
+([ADR 0001](../adr/0001-temporal-durable-execution.md)).
 
 ### Pipeline
 
@@ -50,22 +82,19 @@ Stages exchange these models:
   Output that doesn't match the model fails the call; 04 replaces this with a
   repair loop.
 
-**Prompts** (one builder per role, no prompt text in service logic):
+Each role has one prompt builder; service logic contains no prompt text. Calls
+include both a textual JSON contract and a response schema. Extractor and
+generator require English output. Missing facts are named in `missing_fields`
+instead of being invented.
 
-- Each prompt spells out the JSON shape in words, and the call also sends the
-  schema: small local models follow a format better when it is in the text.
-  Prompts require English output, whatever the source language.
-- Extractor: no data → the field name goes to `missing_fields`; never invent a
-  value.
-- Critic: numbered rules, and each issue cites the rule it breaks (for example
-  `R1: title is 134 characters`). Models count characters badly, so the prompt
-  also states the title's length.
+The critic receives the measured title length and returns issues identified by
+these rule IDs:
+
   - **R1.** The title is at most 100 characters.
   - **R2.** Every characteristic in the draft appears in the facts.
   - **R3.** The description states nothing absent from the facts.
   - **R4.** The title names the product type and at least one key
     specification.
-  - **R5.** All text is in English.
 
 Temperatures are 0.2 (extractor), 0.4 (generator) and 0.1 (critic).
 `max_tokens` is a generous 4096 for all three, because reasoning models spend
@@ -75,14 +104,15 @@ part of it before they answer.
 
 The only module that imports `openai`
 ([ADR 0003](../adr/0003-llm-client-boundary.md)). One function takes our own
-messages and an optional response schema, and returns text, model, token usage
-and latency.
+messages, an optional response schema, and a request timeout and retry budget,
+then returns text, model, token usage and latency.
 
 - **Retries:** on connection errors, timeouts, 429 and 5xx; never on another
-  4xx. `LLM_MAX_RETRIES` counts retries after the first call (default 2, so at
-  most 3 calls). Exponential backoff with full jitter, capped at 8 s; a numeric
-  `Retry-After` replaces the backoff under the same cap. The SDK's own retries
-  are off, so ours are the only ones.
+  4xx. Each stage has its own request timeout and retry count: extraction is
+  60 s with 1 retry, generation is 120 s with 2 retries, and critique is 45 s
+  with 1 retry. A retry count excludes the first call. Exponential backoff with
+  full jitter is capped at 8 s; a numeric `Retry-After` replaces the backoff
+  under the same cap. The SDK's own retries are off, so ours are the only ones.
 - **Errors:** SDK exceptions never leave the module. Exhausted retries become
   "model unavailable" (503); anything retrying can't fix becomes "model
   rejected the request" (502).
@@ -118,14 +148,14 @@ One workflow per job, ID `card-job-{job_id}`, with four activities:
 
 | Activity | Does | Start-to-close | Max attempts |
 |----------|------|----------------|--------------|
-| `extract_facts` | extraction | 8 min | 2 |
+| `extract_facts` | extraction | 3 min | 2 |
 | `generate_draft` | generation | 8 min (25 min schedule-to-close) | 3 |
-| `critique_draft` | critique | 8 min | 2 |
+| `critique_draft` | critique | 2 min | 2 |
 | `record_job_status` | status write | 10 s | 5 |
 
-- 8 minutes covers one full client call with its retries:
-  `LLM_TIMEOUT_S` × (`LLM_MAX_RETRIES` + 1) plus backoff. Raise it together
-  with those settings.
+- Each model activity timeout covers that stage's complete request-and-retry
+  budget plus overhead. Raise it together with the corresponding LLM timeout
+  or retry setting.
 - Retries start after 2 s, with backoff coefficient 2. Errors that retrying
   can't fix are non-retryable: invalid model output, a rejected model request,
   a disallowed status transition, a missing job.
@@ -139,9 +169,8 @@ One workflow per job, ID `card-job-{job_id}`, with four activities:
   long it lasts. Only the first decision counts; later ones are logged and
   ignored. It records `approved` or `rejected` and completes.
 - **Query:** `get_state()` returns the status, attempt and whether decided.
-- **Worker** (`make worker`): registers the workflow and the four activities,
-  has a thread pool for future synchronous activities, and stops cleanly on
-  SIGINT/SIGTERM.
+- **Worker:** registers the workflow and four activities, has a thread pool
+  for future synchronous activities, and stops cleanly on SIGINT/SIGTERM.
 
 ### HTTP API
 
@@ -178,8 +207,8 @@ Business endpoints live under `/api/v1`. Errors answer `{"detail": "…"}`.
   the current status, which changes once the workflow records the decision. A
   missing or closed workflow answers `404`.
 - **Workflow view:** `state` is `null` when no worker answers within 2 s.
-- **Readiness** adds a Temporal check after the database and `vector` checks,
-  2 s each. The first failure answers `503`.
+- **Readiness** runs the database/`vector` probe, then a Temporal probe. Each
+  probe has a 2 s timeout; the first failure answers `503`.
 
 ## Behaviour
 
@@ -208,72 +237,48 @@ any non-terminal status ──────────────────�
 
 ### Human decision
 
-Decisions arrive as signals, the simpler mechanism. The API's status check and
-the signal are not atomic, so two concurrent decisions can both pass the
-check; the workflow keeps only the first, so the outcome is still correct.
-Temporal Updates with validators would close the gap; that is a possible later
-upgrade.
+Decisions arrive as signals. The API status check and signal are not atomic,
+so concurrent decisions can both pass the check; the workflow persists only
+the first decision.
 
 ### Durability and failures
 
-If the worker dies during `generating`, a restarted worker replays the history
-and continues from the first activity that did not complete. Completed
-activities, such as `extract_facts`, don't run again.
-
-Ctrl+C makes the SDK report the running activity as failed, so it is retried
-as soon as a worker is back, using one of its attempts. A SIGKILLed worker is
-noticed only after the start-to-close timeout (8 min). Heartbeats are a
-possible later upgrade.
+After a worker loss, Temporal resumes at the first incomplete activity.
+Completed activities do not run again. An interrupted activity consumes an
+attempt; an ungraceful loss is detected at its start-to-close timeout.
 
 When an activity fails for good, the workflow records `failed` with the
 cause's type and message (best effort), then fails. The job row stays the
 record.
 
-## Testing
+## Verification
 
-No test needs a model: pipeline tests replace the client function with
-scripted replies. Database tests use a disposable Postgres container migrated
-with dbmate. Workflow tests use Temporal's time-skipping environment with stub
-activities.
+Automated verification is organized by requirement:
 
-Scenarios: the pipeline passes, revises (the second prompt carries the issues
-and the previous draft), runs out of rounds, parses fenced JSON and rejects
-garbage. The client retries a 429 after `Retry-After`, fails a 400 at once and
-gives up after `LLM_MAX_RETRIES + 1` failed connections. Jobs replay by key,
-reject a reused key, stay single under concurrent creates, count an attempt
-once and refuse a disallowed transition. The workflow reaches approval
-(ignoring a second decision), review then rejection, and `failed`. The API
-covers replay, `422`, `404`, `409`, and `503` with the job left `pending`.
+- **GEN-1, GEN-2:** pipeline unit tests cover pass, revision, exhausted rounds,
+  fenced JSON and invalid output.
+- **GEN-3:** client unit tests cover retryable and non-retryable provider
+  failures and the application error boundary.
+- **GEN-4, GEN-7:** Temporal integration tests cover activity replay, approval,
+  rejection, duplicate decisions and terminal failure.
+- **GEN-5, GEN-6:** repository and API integration tests cover concurrent
+  creation, key reuse, allowed transitions and dependency failures.
+- **GEN-8:** model calls are substituted, database tests use testcontainers,
+  and workflow tests use Temporal's test environment with stub activities.
 
 ## Acceptance criteria
 
-1. `POST /api/v1/cards` with a product description returns a draft from LM
-   Studio. *(manual)*
-2. `POST /api/v1/jobs` returns `202` with an id. Polling `GET /api/v1/jobs/{id}`
-   shows the statuses progressing to `awaiting_approval` or `needs_review`.
-   Repeating the request with the same `Idempotency-Key` returns the same id.
-   *(manual + test)*
-3. Stop the worker while the job is `generating`, then restart it. The job
-   still finishes, and the Temporal UI shows `extract_facts` ran once.
-   *(manual)*
-4. `POST …/approve` moves the job to `approved`. The workflow history at
-   <http://localhost:8233> shows the activities, the wait, the signal and
-   completion. *(manual + test)*
-5. `make check` passes. *(test)*
+1. The automated verification above passes in CI. *(test)*
+2. A synchronous preview returns a draft from the configured model. *(manual)*
+3. Repeating an asynchronous submission with one idempotency key returns one
+   job, which reaches `awaiting_approval` or `needs_review`. *(manual + test)*
+4. Restarting the worker during generation completes the job without rerunning
+   an activity already recorded as complete. *(manual + test)*
+5. Approving or rejecting a waiting job records the first decision and
+   completes its workflow. *(manual + test)*
 
-### Runbook
-
-```bash
-make up          # terminal 1
-make migrate-up  # terminal 2, once
-make run         # terminal 2
-make worker      # terminal 3
-curl -s -X POST localhost:8000/api/v1/jobs -H 'Content-Type: application/json' \
-  -H 'Idempotency-Key: demo-1' \
-  -d '{"supplier_text": "Immersion blender MixerPro 800. Power 800 W, 2 speeds."}'
-curl -s localhost:8000/api/v1/jobs/<id>   # poll; Ctrl+C the worker during "generating", then restart it
-curl -s -X POST localhost:8000/api/v1/jobs/<id>/approve
-```
+Operational commands and example requests live in the
+[README](../../README.md).
 
 ## Open questions
 

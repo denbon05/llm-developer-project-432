@@ -32,14 +32,19 @@ earlier steps taught us.
 - **accepted**: reviewed; implementation may start
 - **implemented**: code merged and acceptance criteria verified
 
-## Template
+## Specification structure
 
-Every spec uses these sections:
+A feature spec is a software design contract. It contains:
 
-1. **Goal**: the outcome, in one paragraph
-2. **Non-goals**: what is deliberately left out, and where it lands instead
-3. **Contracts**: modules, HTTP API, database schema, configuration
-4. **Behaviour**: state machines, retry rules, failure modes
-5. **Testing**: test seams, what is tested automatically and what manually
-6. **Acceptance criteria**: checkable items, each marked *(test)* or *(manual)*
-7. **Open questions**: each resolved question links to an ADR or is removed
+1. **Context**: the problem and intended outcome.
+2. **Requirements**: numbered, externally meaningful, testable statements.
+3. **Non-goals**: scope deliberately deferred or excluded.
+4. **Design**: component flow, boundaries, interfaces, data and ownership.
+5. **Behaviour**: state transitions, invariants and failure semantics.
+6. **Verification**: each requirement traced to an automated or manual check.
+7. **Acceptance criteria**: a short, checkable definition of done.
+8. **Open questions**: unresolved design choices only.
+
+Operational commands and examples belong in the root README. Decisions that
+need their alternatives and consequences preserved belong in `docs/adr/`.
+Specs may link to either instead of duplicating them.

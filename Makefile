@@ -1,6 +1,6 @@
 DBMATE := uv run dbmate --no-dump-schema
 
-up:
+infra:
 	docker compose up
 
 down:

@@ -88,7 +88,7 @@ name. Tuning settings have defaults in code and can still be overridden.
 | `DATABASE_URL` | `postgres://card:card@localhost:5432/card?sslmode=disable` | app pool and dbmate (one URL) |
 | `DB_POOL_MAX_SIZE` | `10` | pool |
 | `TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE`, `TEMPORAL_TASK_QUEUE` | `localhost:7233`, `default`, `card-generation` | 03 |
-| `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`, `LLM_TIMEOUT_S`, `LLM_MAX_RETRIES` | LM Studio defaults | 03 |
+| `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`, stage-specific LLM timeouts and retry counts | LM Studio defaults | 03 |
 
 ### Migrations
 
@@ -143,10 +143,8 @@ committed.
 
 ### Developer commands and CI
 
-`make` covers infrastructure (`up`, `down`), setup (`install`), running
-(`run`, `worker`), migrations (`migrate-up`, `migrate-status`,
-`migrate-rollback`, `migration name=…`) and checks (`lint`, `typecheck`,
-`test`, `check`). The README documents each.
+The Makefile is the developer entry point for infrastructure, setup, services,
+migrations and checks. The README is the canonical command reference.
 
 Tests use disposable Postgres containers migrated with dbmate, never the
 developer's Compose database. CI (`.github/workflows/ci.yml`) runs
@@ -162,7 +160,7 @@ developer's Compose database. CI (`.github/workflows/ci.yml`) runs
 - **Database down later:** `/health/live` stays 200; `/health/ready` and
   every request that needs the database answer 503. Once the database is back,
   the next request connects again, with no restart.
-- **Migration runs are idempotent:** a second `make migrate-up` applies
+- **Migration runs are idempotent:** applying migrations again changes
   nothing and exits with code 0.
 
 ## Testing
@@ -176,10 +174,11 @@ are exercised by the manual checks.
 
 ## Acceptance criteria
 
-1. With `make up` running, `docker compose ps` shows `db` and `temporal`
-   healthy, and the Temporal UI opens at <http://localhost:8233>. *(manual)*
-2. The first `make migrate-up` on a fresh volume applies `enable_vector`. A
-   second run applies nothing, and `make migrate-status` reports `Pending: 0`.
+1. With the Compose infrastructure running, `docker compose ps` shows `db`
+   and `temporal` healthy, and the Temporal UI opens at
+   <http://localhost:8233>. *(manual)*
+2. The first migration run on a fresh volume applies `enable_vector`. A
+   second run applies nothing, and migration status reports `Pending: 0`.
    *(manual)*
 3. `GET /health/ready` returns 200 with the active `vector` version.
    *(manual)*
