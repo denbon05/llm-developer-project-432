@@ -35,7 +35,7 @@ Prerequisites:
 ```bash
 git clone https://github.com/denbon05/llm-developer-project-432.git
 cd llm-developer-project-432
-cp .env.example .env    # every variable is documented there; defaults work locally
+cp .env.example .env    # environment-specific values; defaults work locally
 make install
 make infra              # stays in this terminal and streams logs
 ```

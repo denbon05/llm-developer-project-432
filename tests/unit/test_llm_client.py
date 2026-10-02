@@ -2,12 +2,13 @@ import httpx2
 import pytest
 from openai import AsyncOpenAI
 
-from app.core.config import get_settings
 from app.llm import client
 from app.llm.client import ChatMessage, LlmRequestError, LlmUnavailableError
 
 MODEL_URL = "http://model.test/v1"
 MESSAGES = [ChatMessage(role="user", content="Describe the blender.")]
+REQUEST_TIMEOUT_S = 15
+MAX_RETRIES = 2
 RETRY_AFTER_S = 3
 COMPLETION_TEXT = "{}"
 COMPLETION_BODY = {
@@ -50,6 +51,7 @@ def script_server(
     openai_client = AsyncOpenAI(
         base_url=MODEL_URL,
         api_key="test",
+        timeout=REQUEST_TIMEOUT_S,
         max_retries=0,
         http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(reply)),
     )
@@ -60,7 +62,13 @@ def script_server(
 
 async def complete_messages() -> client.Completion:
     """Return the completion for the test messages"""
-    return await client.complete(MESSAGES, temperature=0, max_tokens=16)
+    return await client.complete(
+        MESSAGES,
+        temperature=0,
+        max_tokens=16,
+        timeout_s=REQUEST_TIMEOUT_S,
+        max_retries=MAX_RETRIES,
+    )
 
 
 async def test_complete_waits_retry_after_then_succeeds(
@@ -98,7 +106,7 @@ async def test_complete_gives_up_on_connection_errors(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Connection errors are retried, then raise LlmUnavailableError"""
-    max_calls = get_settings().llm_max_retries + 1
+    max_calls = MAX_RETRIES + 1
     refused: list[httpx2.Response | Exception] = [
         httpx2.ConnectError("connection refused") for _ in range(max_calls)
     ]

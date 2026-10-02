@@ -88,7 +88,7 @@ name. Tuning settings have defaults in code and can still be overridden.
 | `DATABASE_URL` | `postgres://card:card@localhost:5432/card?sslmode=disable` | app pool and dbmate (one URL) |
 | `DB_POOL_MAX_SIZE` | `10` | pool |
 | `TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE`, `TEMPORAL_TASK_QUEUE` | `localhost:7233`, `default`, `card-generation` | 03 |
-| `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`, stage-specific LLM timeouts and retry counts | LM Studio defaults | 03 |
+| `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`, `LLM_TIMEOUT_S`, `LLM_MAX_RETRIES` | LM Studio defaults | 03 |
 
 ### Migrations
 

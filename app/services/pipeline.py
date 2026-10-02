@@ -11,6 +11,7 @@ from app.agents.prompts import (
     build_extractor_messages,
     build_generator_messages,
 )
+from app.core.config import get_settings
 from app.core.errors import UpstreamError
 from app.core.logging import get_logger
 from app.llm.client import complete
@@ -49,11 +50,14 @@ def parse_output[ModelT: BaseModel](text: str, schema: type[ModelT]) -> ModelT:
 
 async def extract(supplier_text: str) -> SupplierFacts:
     """Return the supplier facts found in the supplier text"""
+    settings = get_settings()
     completion = await complete(
         build_extractor_messages(supplier_text),
         response_schema=SupplierFacts,
         temperature=EXTRACTOR_TEMPERATURE,
         max_tokens=EXTRACTOR_MAX_TOKENS,
+        timeout_s=settings.llm_extract_timeout_s,
+        max_retries=settings.llm_extract_max_retries,
     )
     return parse_output(completion.text, SupplierFacts)
 
@@ -64,22 +68,28 @@ async def generate(
     previous_draft: CardDraft | None = None,
 ) -> CardDraft:
     """Return a card draft written from the facts and any critic feedback"""
+    settings = get_settings()
     completion = await complete(
         build_generator_messages(facts, feedback, previous_draft),
         response_schema=CardDraft,
         temperature=GENERATOR_TEMPERATURE,
         max_tokens=GENERATOR_MAX_TOKENS,
+        timeout_s=settings.llm_generate_timeout_s,
+        max_retries=settings.llm_generate_max_retries,
     )
     return parse_output(completion.text, CardDraft)
 
 
 async def critique(facts: SupplierFacts, draft: CardDraft) -> Critique:
     """Return the critic's verdict on the draft"""
+    settings = get_settings()
     completion = await complete(
         build_critic_messages(facts, draft),
         response_schema=Critique,
         temperature=CRITIC_TEMPERATURE,
         max_tokens=CRITIC_MAX_TOKENS,
+        timeout_s=settings.llm_critique_timeout_s,
+        max_retries=settings.llm_critique_max_retries,
     )
     return parse_output(completion.text, Critique)
 

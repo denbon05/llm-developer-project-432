@@ -29,7 +29,9 @@ policy for accessing the model. It decides:
   `LlmUnavailableError` (transient, retries exhausted) or `LlmRequestError`
   (retrying won't help).
 - **Two retry levels, never mixed.** The client retries a *call*. Temporal
-  retries a *step*. Neither retries the whole pipeline.
+  retries a *step* after worker loss or an activity timeout. Exhausted call
+  retries (`LlmUnavailableError`) are not retried again by Temporal. Neither
+  retries the whole pipeline.
 - **Tests substitute the client interface.** No test needs a model server.
 - **Later concerns land at this boundary:** per-call cost logging and routing
   between a cheap model and the main model (step 08). Because every call passes

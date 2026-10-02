@@ -10,7 +10,7 @@ from temporalio.exceptions import (
 )
 
 with workflow.unsafe.imports_passed_through():
-    from app.llm.client import LlmRequestError
+    from app.llm.client import LlmRequestError, LlmUnavailableError
     from app.repositories.jobs import (
         InvalidJobTransitionError,
         JobNotFoundError,
@@ -34,10 +34,11 @@ with workflow.unsafe.imports_passed_through():
         record_job_status,
     )
 
-# Constants, not settings: workflow code is replayed, and values read from the
-# environment could differ between replays.
-MODEL_STAGE_TIMEOUT = timedelta(minutes=8)
+# Constants, not settings: replayed workflow code cannot read the environment.
+EXTRACT_START_TO_CLOSE_TIMEOUT = timedelta(minutes=3)
+GENERATE_START_TO_CLOSE_TIMEOUT = timedelta(minutes=8)
 GENERATE_SCHEDULE_TO_CLOSE_TIMEOUT = timedelta(minutes=25)
+CRITIQUE_START_TO_CLOSE_TIMEOUT = timedelta(minutes=2)
 RECORD_STATUS_TIMEOUT = timedelta(seconds=10)
 RETRY_INITIAL_INTERVAL = timedelta(seconds=2)
 RETRY_BACKOFF_COEFFICIENT = 2.0
@@ -45,10 +46,11 @@ EXTRACT_MAX_ATTEMPTS = 2
 GENERATE_MAX_ATTEMPTS = 3
 CRITIQUE_MAX_ATTEMPTS = 2
 RECORD_STATUS_MAX_ATTEMPTS = 5
-# Retrying these cannot change the outcome.
+# The client already exhausted provider retries for LlmUnavailableError.
 NON_RETRYABLE_ERRORS = (
     InvalidModelOutputError,
     LlmRequestError,
+    LlmUnavailableError,
     InvalidJobTransitionError,
     JobNotFoundError,
 )
@@ -122,7 +124,7 @@ class CardGenerationWorkflow:
         facts = await workflow.execute_activity(
             extract_facts,
             supplier_text,
-            start_to_close_timeout=MODEL_STAGE_TIMEOUT,
+            start_to_close_timeout=EXTRACT_START_TO_CLOSE_TIMEOUT,
             retry_policy=EXTRACT_RETRY_POLICY,
         )
         draft: CardDraft | None = None
@@ -140,7 +142,7 @@ class CardGenerationWorkflow:
             draft = await workflow.execute_activity(
                 generate_draft,
                 args=[facts, last_critique.issues, draft],
-                start_to_close_timeout=MODEL_STAGE_TIMEOUT,
+                start_to_close_timeout=GENERATE_START_TO_CLOSE_TIMEOUT,
                 schedule_to_close_timeout=GENERATE_SCHEDULE_TO_CLOSE_TIMEOUT,
                 retry_policy=GENERATE_RETRY_POLICY,
             )
@@ -148,7 +150,7 @@ class CardGenerationWorkflow:
             last_critique = await workflow.execute_activity(
                 critique_draft,
                 args=[facts, draft],
-                start_to_close_timeout=MODEL_STAGE_TIMEOUT,
+                start_to_close_timeout=CRITIQUE_START_TO_CLOSE_TIMEOUT,
                 retry_policy=CRITIQUE_RETRY_POLICY,
             )
         await self.record_status(

@@ -104,21 +104,10 @@ part of it before they answer.
 
 The only module that imports `openai`
 ([ADR 0003](../adr/0003-llm-client-boundary.md)). One function takes our own
-messages, an optional response schema, and a request timeout and retry budget,
-then returns text, model, token usage and latency.
-
-- **Retries:** on connection errors, timeouts, 429 and 5xx; never on another
-  4xx. Each stage has its own request timeout and retry count: extraction is
-  60 s with 1 retry, generation is 120 s with 2 retries, and critique is 45 s
-  with 1 retry. A retry count excludes the first call. Exponential backoff with
-  full jitter is capped at 8 s; a numeric `Retry-After` replaces the backoff
-  under the same cap. The SDK's own retries are off, so ours are the only ones.
-- **Errors:** SDK exceptions never leave the module. Exhausted retries become
-  "model unavailable" (503); anything retrying can't fix becomes "model
-  rejected the request" (502).
-- **Logs:** `llm_call_retry` (warning), `llm_call_failed` (error) and
-  `llm_call_completed` (info: model, latency, tokens), so retries and failures
-  are counted separately.
+messages, an optional response schema, timeout and retry count, and returns
+text, model, token usage and latency. Retry policy, error mapping and the
+client/Temporal split live in that ADR. Logs: `llm_call_retry`,
+`llm_call_failed`, `llm_call_completed`.
 
 ### Jobs
 
@@ -153,12 +142,9 @@ One workflow per job, ID `card-job-{job_id}`, with four activities:
 | `critique_draft` | critique | 2 min | 2 |
 | `record_job_status` | status write | 10 s | 5 |
 
-- Each model activity timeout covers that stage's complete request-and-retry
-  budget plus overhead. Raise it together with the corresponding LLM timeout
-  or retry setting.
-- Retries start after 2 s, with backoff coefficient 2. Errors that retrying
-  can't fix are non-retryable: invalid model output, a rejected model request,
-  a disallowed status transition, a missing job.
+- Retries start after 2 s, with backoff coefficient 2. Non-retryable: invalid
+  model output, a rejected model request, exhausted call retries, a
+  disallowed status transition, a missing job.
 - **Algorithm:** the same loop as the synchronous pipeline, with a status
   write before each stage (`extracting`, `generating` with a new attempt,
   `critiquing`), then `awaiting_approval` or `needs_review` with the result.

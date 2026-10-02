@@ -1,6 +1,12 @@
 from functools import cache
+from typing import Self
 
-from pydantic import NonNegativeInt, PositiveInt
+from pydantic import (
+    NonNegativeInt,
+    PositiveFloat,
+    PositiveInt,
+    model_validator,
+)
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -20,14 +26,41 @@ class Settings(BaseSettings):
     llm_base_url: str = "http://localhost:1234/v1"
     llm_api_key: str = "lm-studio"
     llm_model: str = "gemma-4-e4b-it"
-    llm_timeout_s: float = 120
+    llm_timeout_s: PositiveFloat = 120
     # Retries after the first call, so the default makes three calls at most
     llm_max_retries: NonNegativeInt = 2
+    llm_extract_timeout_s: PositiveFloat = 60
+    llm_extract_max_retries: NonNegativeInt = 1
+    llm_generate_timeout_s: PositiveFloat = 120
+    llm_generate_max_retries: NonNegativeInt = 2
+    llm_critique_timeout_s: PositiveFloat = 45
+    llm_critique_max_retries: NonNegativeInt = 1
 
     model_config = SettingsConfigDict(
         env_file=".env",
         extra="ignore",
     )
+
+    @model_validator(mode="after")
+    def check_stage_call_limits(self) -> Self:
+        """Reject stage timeouts or retries above the client defaults"""
+        for timeout_s in (
+            self.llm_extract_timeout_s,
+            self.llm_generate_timeout_s,
+            self.llm_critique_timeout_s,
+        ):
+            if timeout_s > self.llm_timeout_s:
+                raise ValueError("a stage LLM timeout exceeds LLM_TIMEOUT_S")
+        for max_retries in (
+            self.llm_extract_max_retries,
+            self.llm_generate_max_retries,
+            self.llm_critique_max_retries,
+        ):
+            if max_retries > self.llm_max_retries:
+                raise ValueError(
+                    "a stage LLM retry count exceeds LLM_MAX_RETRIES"
+                )
+        return self
 
 
 @cache

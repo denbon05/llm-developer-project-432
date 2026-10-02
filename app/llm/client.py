@@ -19,11 +19,11 @@ from app.core.config import get_settings
 from app.core.errors import UnavailableError, UpstreamError
 from app.core.logging import get_logger
 
-BACKOFF_MULTIPLIER_S = 0.5
-BACKOFF_MAX_S = 8.0
 RETRY_AFTER_HEADER = "retry-after"
 TOO_MANY_REQUESTS = 429
 SERVER_ERROR_MIN_CODE = 500
+BACKOFF_MULTIPLIER_S = 0.5
+BACKOFF_MAX_S = 8.0
 
 logger = get_logger(__name__)
 # Full jitter
@@ -134,6 +134,7 @@ async def request_completion(
     response_schema: type[BaseModel] | None,
     temperature: float,
     max_tokens: int,
+    timeout_s: float,
 ) -> Completion:
     """Make one call to the model and return its completion"""
     # Our messages have exactly the shape of the SDK's message dicts.
@@ -152,6 +153,7 @@ async def request_completion(
         ),
         temperature=temperature,
         max_tokens=max_tokens,
+        timeout=timeout_s,
     )
     usage = response.usage
     completion = Completion(
@@ -178,11 +180,13 @@ async def complete(
     response_schema: type[BaseModel] | None = None,
     temperature: float,
     max_tokens: int,
+    timeout_s: float,
+    max_retries: int,
 ) -> Completion:
     """Return the model's completion for these messages"""
     retrying = AsyncRetrying(
         retry=retry_if_exception(is_retryable),
-        stop=stop_after_attempt(get_settings().llm_max_retries + 1),
+        stop=stop_after_attempt(max_retries + 1),
         wait=wait_before_retry,
         sleep=asyncio.sleep,
         before_sleep=log_retry,
@@ -195,6 +199,7 @@ async def complete(
             response_schema,
             temperature,
             max_tokens,
+            timeout_s,
         )
     except openai.OpenAIError as error:
         logger.error(

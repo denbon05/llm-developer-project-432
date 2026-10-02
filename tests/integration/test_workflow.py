@@ -10,6 +10,7 @@ from temporalio.contrib.pydantic import pydantic_data_converter
 from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
 
+from app.llm.client import LlmUnavailableError
 from app.schemas.cards import CardDraft, Critique, SupplierFacts
 from app.schemas.jobs import (
     CardWorkflowInput,
@@ -250,5 +251,27 @@ async def test_workflow_records_failed_when_activity_fails(
 
     # Before failing, the workflow records the original activity error for
     # clients that read the job from the database.
+    assert updates[-1].status == JobStatus.FAILED
+    assert updates[-1].error == f"{type(error).__name__}: {error}"
+
+
+async def test_workflow_does_not_retry_exhausted_model_retries(
+    env: WorkflowEnvironment,
+) -> None:
+    """Exhausted call retries fail the activity without another attempt"""
+    updates: list[JobStatusUpdate] = []
+    error = LlmUnavailableError()
+    activities, _, generation_inputs = build_stub_activities(
+        [PASS],
+        updates,
+        generation_errors=[error],
+    )
+
+    async with build_worker(env, activities):
+        handle = await start_workflow(env)
+        with pytest.raises(WorkflowFailureError):
+            await handle.result()
+
+    assert len(generation_inputs) == 1
     assert updates[-1].status == JobStatus.FAILED
     assert updates[-1].error == f"{type(error).__name__}: {error}"
