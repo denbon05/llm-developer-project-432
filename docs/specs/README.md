@@ -14,11 +14,11 @@ Architecture decisions live in [`docs/adr/`](../adr/). Domain vocabulary lives i
 | 01 | [Product overview](01-product-overview.md) | Problem, promises, principles, system shape | accepted |
 | 02 | [Platform foundation](02-platform-foundation.md) | Postgres + pgvector, Temporal, migrations, pool, health, tests, CI | accepted |
 | 03 | [Generation pipeline](03-generation-pipeline.md) | LLM client, three-role pipeline, jobs, durable workflow, human approval | accepted |
-| 04 | Structured output | Strict card contract, output repair, targeted field fixes, confidence | planned |
+| 04 | [Structured output](04-structured-output.md) | Card contract, tolerant reading, output repair, field fixes, confidence routing, input language | accepted |
 | 05 | Document ingestion | pdf/docx/xlsx parsing, normalisation, chunking, document states | planned |
 | 06 | Embeddings and search | Local embeddings, pgvector, keyword and hybrid search | planned |
 | 07 | Grounded generation | Retrieval-backed generation, citation verification, end-to-end flow | planned |
-| 08 | Cost, tracing, evaluation | LLM call ledger, two-model policy, trace IDs, quality metrics | planned |
+| 08 | Cost, tracing, evaluation | LLM call ledger, two-model policy, trace IDs, call labels in logs, strict output mode, quality metrics | planned |
 | 09 | Guardrails | PII masking, prompt-injection detection, output filter | planned |
 | 10 | Delivery | Clean-slate run, README, metrics report (no separate spec) | planned |
 

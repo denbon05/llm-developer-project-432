@@ -6,7 +6,6 @@
 
 Supplier text must become a card draft without tying durable work to an HTTP
 request or exposing provider-specific model behavior to the application.
-PostgreSQL is the source of job status; Temporal owns execution history.
 
 The design has two entry points over one generation algorithm:
 
@@ -34,13 +33,12 @@ The design has two entry points over one generation algorithm:
 
 ## Non-goals
 
-- Strict output contract, output repair, targeted field fixes, confidence
-  (04). Here, output that can't be parsed fails the call.
+- The card contract, output repair, field fixes and confidence routing
+  ([04](04-structured-output.md)).
 - Documents, retrieval, citations (05–07). The input is plain supplier text.
 - Cost ledger, two-model policy, trace IDs (08). PII masking and injection
   detection (09).
 - Temporal Updates for decisions, activity heartbeats, a "stuck jobs" query.
-  See [Behaviour](#behaviour).
 - A message queue. Temporal carries all background work
   ([ADR 0001](../adr/0001-temporal-durable-execution.md)).
 
@@ -57,44 +55,20 @@ POST /jobs ─▶ jobs repository ─▶ Temporal workflow
                                       └─▶ status activity ───────▶ jobs repository
 ```
 
-The synchronous service and Temporal workflow implement the same state
-transitions separately. Workflow code stays deterministic; the shared
-constants and tests keep both paths aligned
-([ADR 0001](../adr/0001-temporal-durable-execution.md)).
-
 ### Pipeline
 
-Stages exchange these models:
+The roles exchange `SupplierFacts`, `CardDraft` and `Critique`
+([04](04-structured-output.md#models) defines their fields).
 
-| Model | Fields |
-|-------|--------|
-| `SupplierFacts` | `product_name`, `characteristics: dict[str, str]`, `missing_fields: list[str]` |
-| `CardDraft` | `title`, `description`, `characteristics: dict[str, str]`, `benefits: list[str]` |
-| `Critique` | `verdict: "pass" \| "revise"`, `issues: list[str]` |
-
-- Extraction runs **once**. The facts don't change because the critic
-  disliked a title.
-- Then up to **3 rounds** of generate → critique. A `revise` verdict sends
-  the critic's issues and the previous draft to the next generation.
+- Extraction runs once: the facts don't change because the critic disliked a
+  title.
+- A `revise` verdict sends the critic's issues and the previous draft to the
+  next generation.
 - The last draft is always returned with its round count and last verdict,
   even when it never passed.
-- Model output is stripped of a surrounding Markdown code fence and validated.
-  Output that doesn't match the model fails the call; 04 replaces this with a
-  repair loop.
-
-Each role has one prompt builder; service logic contains no prompt text. Calls
-include both a textual JSON contract and a response schema. Extractor and
-generator require English output. Missing facts are named in `missing_fields`
-instead of being invented.
-
-The critic receives the measured title length and returns issues identified by
-these rule IDs:
-
-  - **R1.** The title is at most 100 characters.
-  - **R2.** Every characteristic in the draft appears in the facts.
-  - **R3.** The description states nothing absent from the facts.
-  - **R4.** The title names the product type and at least one key
-    specification.
+- Each role has one prompt builder; service logic contains no prompt text.
+  Replies, prompts and critic rules follow
+  [04](04-structured-output.md#prompts).
 
 Temperatures are 0.2 (extractor), 0.4 (generator) and 0.1 (critic).
 `max_tokens` is a generous 4096 for all three, because reasoning models spend
@@ -151,9 +125,8 @@ One workflow per job, ID `card-job-{job_id}`, with four activities:
   The loop is written twice on purpose
   ([ADR 0001](../adr/0001-temporal-durable-execution.md)).
 - **Human decision:** the workflow then waits for an `approve` or
-  `reject(reason)` signal. The wait holds no worker slot or connection, however
-  long it lasts. Only the first decision counts; later ones are logged and
-  ignored. It records `approved` or `rejected` and completes.
+  `reject(reason)` signal, logs and ignores later ones, records `approved` or
+  `rejected` and completes.
 - **Query:** `get_state()` returns the status, attempt and whether decided.
 - **Worker:** registers the workflow and four activities, has a thread pool
   for future synchronous activities, and stops cleanly on SIGINT/SIGTERM.
@@ -164,7 +137,7 @@ Business endpoints live under `/api/v1`. Errors answer `{"detail": "…"}`.
 
 | Method and path | Router | Success | Errors |
 |-----------------|--------|---------|--------|
-| `POST /cards` | `cards.py` | `200` draft, rounds, verdict | `502` · `503` |
+| `POST /cards` | `cards.py` | `200` draft, rounds, verdict, status ([04](04-structured-output.md#routing)) | `502` · `503` |
 | `POST /jobs` | `jobs.py` | `202 {"id", "status"}` | `422` key reused with another body · `503` |
 | `GET /jobs/{id}` | `jobs.py` | `200` job | `404` |
 | `POST /jobs/{id}/approve` | `jobs.py` | `202 {"id", "status"}` | `404` · `409` not awaiting a decision · `503` |
@@ -181,16 +154,14 @@ Business endpoints live under `/api/v1`. Errors answer `{"detail": "…"}`.
   other exception is a bug and answers 500.
 - **Bodies:** `supplier_text` is non-empty and at most 20,000 characters.
   `reason` is 1–2,000 characters.
-- **Idempotency:** the `Idempotency-Key` header (1–255 characters) is
-  optional. Without it, each request creates a job. With it, a repeat returns
-  the original job; the same key with another body returns `422`.
+- **Idempotency:** the optional `Idempotency-Key` header (1–255 characters)
+  carries GEN-5. Without it, each request creates a job.
 - **Creating a job:** insert the row as `pending`, then, while the job is
   still `pending`, start its workflow (a workflow that already exists is fine).
   If Temporal is down, the row stays `pending` and the API answers `503`; a
   retry with the same key starts the workflow.
-- **Decisions:** only a job in `awaiting_approval` or `needs_review` accepts
-  one; otherwise `409`. The signal is asynchronous, so the answer is `202` with
-  the current status, which changes once the workflow records the decision. A
+- **Decisions:** the signal is asynchronous, so the answer is `202` with the
+  current status, which changes once the workflow records the decision. A
   missing or closed workflow answers `404`.
 - **Workflow view:** `state` is `null` when no worker answers within 2 s.
 - **Readiness** runs the database/`vector` probe, then a Temporal probe. Each
@@ -210,39 +181,33 @@ any non-terminal status ──────────────────�
 |--------|---------|----------|
 | `pending` | row created; workflow not yet picked up | no |
 | `extracting` / `generating` / `critiquing` | stage in progress; `attempts` counts generation rounds | no |
-| `awaiting_approval` | the critic passed the draft; waiting for a human | no |
-| `needs_review` | revision budget exhausted; draft and issues saved; waiting for a human | no |
+| `awaiting_approval` / `needs_review` | draft saved; waiting for a human ([04](04-structured-output.md#routing) decides which) | no |
 | `approved` / `rejected` | a human decided | yes |
 | `failed` | an activity failed after its retries (error saved) | yes |
 
-- `rejected` means a human rejected the draft, and only that. Running out of
-  revisions is `needs_review`, because a flawed draft is still useful.
-- The status of record lives in Postgres and is written only by
-  `record_job_status`. Temporal history is internal; the API never shows it as
-  the job's status.
+- `rejected` means a human rejected the draft, and only that. A flawed draft
+  is still useful, so it goes to `needs_review`.
+- Only `record_job_status` writes the status (GEN-6).
 
 ### Human decision
 
-Decisions arrive as signals. The API status check and signal are not atomic,
-so concurrent decisions can both pass the check; the workflow persists only
-the first decision.
+The API's status check and the signal are not atomic, so concurrent
+decisions can both pass the check; the workflow keeps only the first.
 
 ### Durability and failures
 
-After a worker loss, Temporal resumes at the first incomplete activity.
-Completed activities do not run again. An interrupted activity consumes an
-attempt; an ungraceful loss is detected at its start-to-close timeout.
-
-When an activity fails for good, the workflow records `failed` with the
-cause's type and message (best effort), then fails. The job row stays the
-record.
+An activity interrupted by a worker loss consumes an attempt; an ungraceful
+loss is detected only at its start-to-close timeout. When an activity fails for
+good, the workflow records `failed` with the cause's type and message (best
+effort), then fails.
 
 ## Verification
 
 Automated verification is organized by requirement:
 
-- **GEN-1, GEN-2:** pipeline unit tests cover pass, revision, exhausted rounds,
-  fenced JSON and invalid output.
+- **GEN-1, GEN-2:** pipeline unit tests cover pass, revision and exhausted
+  rounds. Reading and repairing replies is verified as
+  [04](04-structured-output.md#verification) defines.
 - **GEN-3:** client unit tests cover retryable and non-retryable provider
   failures and the application error boundary.
 - **GEN-4, GEN-7:** Temporal integration tests cover activity replay, approval,
