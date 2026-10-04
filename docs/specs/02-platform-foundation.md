@@ -55,15 +55,8 @@ data/
 - `core/errors.py` holds the error kinds. They carry meaning only; `main.py`
   maps each kind to its HTTP status.
 
-Layering rules, which apply to every later step:
-
-- SQL lives only in `repositories/`. The one exception is the readiness probe
-  in `core/db.py`.
-- Only `llm/client.py` talks to the model provider.
-- `services/` never imports FastAPI, Temporal or database drivers.
-- Routers stay thin: parse the request, call a service or repository, return
-  the result.
-- The environment is read only through `core/config.py`.
+The layering rules apply to every later step. They live in
+[AGENTS.md](../../AGENTS.md#architecture).
 
 ### Infrastructure (`docker-compose.yml`)
 

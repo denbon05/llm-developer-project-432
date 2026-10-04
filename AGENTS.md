@@ -34,7 +34,7 @@
   existing style.
 - Read the target file and its neighbours first, and reuse existing names and
   helpers.
-- Write everything in English: code, prompts, docs, data.
+- Write everything in English: code, prompts, docs.
 - Keep docstrings simple and limited to what the item does; put context and
   rationale in comments.
 
