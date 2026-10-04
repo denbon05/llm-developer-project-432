@@ -1,6 +1,6 @@
 # 04 · Structured output
 
-**Status:** accepted
+**Status:** implemented
 
 ## Context
 
@@ -60,7 +60,7 @@ never filled.
 ```text
 pipeline.py ──────▶ structured.py ──────▶ llm/client.py
 extract, generate,   call, read, validate;
-critique, route      output repair or field fix
+critique, status     output repair or field fix
                           │
                           ├─▶ json_utils.py      read the JSON object in a reply
                           └─▶ schemas/cards.py   validate it
@@ -87,15 +87,18 @@ Validation rules, checked by code on every reply:
   `CardDraft` that the model writes is required, with no default. An omitted
   `missing_fields` would otherwise read as "nothing missing" and give a
   confidence of 1.
-- **Non-blank text:** `product_name`, `title`, `description`, `meta_title` and
-  `meta_description` must contain more than whitespace.
+- **Non-blank text:** `product_name`, `title`, `description`, `meta_title`,
+  `meta_description` and every characteristic name must contain more than
+  whitespace. A blank characteristic name is an error on `characteristics`.
+- **Blank list items:** blank entries in `benefits` and `keywords` are
+  dropped.
 - **Lengths:** title at most 100 characters, meta title at most 60, meta
-  description at most 160. The limits are named constants in
-  `schemas/cards.py`. A value over its limit is an error, never truncated.
+  description at most 160. A value over its limit is an error, never
+  truncated.
   The limits are stated in the prompts and checked in code, but left out of
-  the schema sent to the model: a server that enforces `maxLength` while
-  decoding cuts the text mid-word, so validation never sees the long value and
-  no field fix happens.
+  the schema sent to the model: a model server that enforces `maxLength`
+  while decoding cuts the text mid-word, so validation never sees the long
+  value and no field fix happens.
 - Then, for supplier facts and card drafts, in this order:
   1. **Empty values:** a characteristic whose value is blank or punctuation
      only is removed, and its name is added to `missing_fields` unless it is
@@ -106,6 +109,9 @@ Validation rules, checked by code on every reply:
      (compared trimmed and case-insensitively; the first spelling stays).
   3. **One list per name:** a name that is both a characteristic and a missing
      field (compared the same way) is an error on the whole object.
+- **Critique:** a `revise` verdict without issues is an error on the whole
+  object, because a revision needs something to fix. A `pass` may carry
+  issues; they are saved with the draft.
 - Counts in prompts (3–4 sentences, 3–5 benefits, 3–8 keywords) are guidance,
   not rules: breaking one costs no model call.
 
@@ -121,15 +127,19 @@ confidence = characteristics / (characteristics + missing_fields)
 
 Both counts come from the draft, after the validation rules have cleaned the
 lists. The value is rounded to two decimals and is 0 when both lists are empty,
-so it always lies between 0 and 1. Code computes it as a Pydantic computed
-field: it is not part of the schema the generator receives, and a value the
-model sends is ignored. Drafts sent back to the generator for a revision, and
-drafts sent to the critic, leave it out.
+so it always lies between 0 and 1. Code computes it: it is not part of the
+schema the generator receives, and a value the model sends is ignored. Drafts
+sent back to the generator for a revision, and drafts sent to the critic,
+leave it out.
 
 It measures coverage, which makes it deterministic and cheap to test. It trusts
-the missing-field list, which the critic checks against the facts. Once
-evaluation (08) shows how well it tracks human decisions, a model's own
-assessment, or a combination of both, may replace it.
+the missing-field list, which the critic checks against the facts. The
+extractor decides which fields a card needs, so a model that lists more of them
+gets a lower confidence for the same input. The extractor prompt limits the
+list to fields a buyer of the product type expects on its card, and evaluation
+(08) calibrates the threshold. Once evaluation shows how well confidence tracks
+human decisions, a model's own assessment, or a combination of both, may
+replace it.
 
 ### Reading a reply (`json_utils.py`)
 
@@ -160,42 +170,43 @@ read.
      top-level field. Ask for only those fields. A nested error, such as one
      inside `seo` or under one characteristic, asks for its whole top-level
      field. The request sends a response schema reduced to those fields, all
-     required, so a server that constrains decoding to the schema doesn't make
-     the model write the whole object again. The returned fields replace those
-     in the current object, other keys in the fix reply are ignored, and the
-     merged object is validated again. A fix reply that can't be read leaves
-     the current object as it was, and the next request is the same field fix.
+     required, so a model server that constrains decoding to the schema
+     doesn't make the model write the whole object again. The returned fields
+     replace those in the current object, other keys in the field-fix reply
+     are ignored, and the merged object is validated again. A field-fix reply
+     that can't be read leaves the current object as it was, and the same
+     field fix is sent again.
    - **Output repair:** there is no current object yet (an empty reply, no
      JSON object, invalid JSON), or an error applies to the whole object. Ask
      for the whole object again, with the full response schema. A reply read
      as an object becomes the current object.
 4. Each request is the role's original messages, then an `assistant` message
-   (the current object for a field fix, the latest reply for an output
-   repair), then a `user` message listing the errors and saying what to
-   return. Earlier failed replies are not sent again.
+   showing what the errors are about, then a `user` message listing the
+   errors and saying what to return. The `assistant` message is the current
+   object, or, for an output repair after a reply that couldn't be read, that
+   reply. After a field fix, the model therefore sees the whole merged object,
+   not only its last partial reply. Earlier failed replies are not sent again.
 
-- **Repair budget:** `MAX_REPAIRS = 2`, a constant in `structured.py`, counts
-  output repairs and field fixes together, after the first call. One
-  extraction, generation or critique therefore makes at most three model
-  calls.
+- **Repair budget:** 2, counting output repairs and field fixes together,
+  after the first call. One extraction, generation or critique therefore makes
+  at most three model calls.
 - **Exhausted budget:** `InvalidModelOutputError`, carrying the last errors.
-  It is an upstream error (`502`) and moves from `pipeline.py` to
-  `structured.py`, which raises it; the workflow's list of non-retryable errors
-  imports it from there.
+  It is an upstream error (`502`), raised by the repair loop.
 - **Empty replies** go through output repair like any invalid reply. If they
   turn out to come from reasoning models spending all of `max_tokens` before
-  answering, failing at once is the alternative; a code comment marks this.
+  answering, failing at once is the alternative.
 - **Client retries and repairs stay separate.** The LLM client retries a call
   that failed, using that role's timeout and retry settings. A repair follows a
   call that succeeded but returned unusable output.
-- `ChatMessage` gains the `assistant` role.
+- The LLM client accepts `assistant` messages, so a request can carry the
+  model's earlier reply.
 
 ### Error format
 
 Each error reads `field: message`. A nested field is a dotted path
 (`seo.meta_title`). An error on the whole object, or a reading error, is the
-message alone. The custom rules raise their errors without Pydantic's
-`Value error, ` prefix.
+message alone. No message carries an error-type prefix, whether a built-in
+rule or one of the card's own rules raised it.
 
 ```text
 # To the model: one error per line
@@ -234,20 +245,24 @@ llm_call_completed model=… latency_s=… …
 
 - Every prompt still describes its JSON shape in words, and every call still
   sends the response schema, with no strict flag and no length limits. Any
-  OpenAI-compatible server can sit behind the client: one that constrains
-  decoding follows the schema, and one that ignores it still gets the shape
-  from the prompt. Reading and validating the reply is the contract on any
-  server.
+  OpenAI-compatible model server can sit behind the client: one that
+  constrains decoding follows the schema, and one that ignores it still gets
+  the shape from the prompt. Reading and validating the reply is the contract
+  on any model server.
 - **Language:** prompts are in English. The extractor and the generator write
   names, values and text in the main language of the supplier text.
 - **Extractor:** no data means the name goes to `missing_fields`, never a
-  placeholder value.
-- **Generator:** the title is at most 100 characters; the SEO block has a meta
-  title of at most 60 characters, a meta description of at most 160 and 3–8
-  keywords; `missing_fields` lists every missing field from the facts, and
-  none of them gets a value. Revisions work as before.
+  placeholder value. `missing_fields` lists only fields a buyer of the product
+  type expects on its card. When the text names no product, the product type
+  is the `product_name`.
+- **Generator:** the title is at most 100 characters and names the product
+  type and at least one key specification; the SEO block has a meta title of
+  at most 60 characters, a meta description of at most 160 and 3–8 keywords;
+  `missing_fields` lists every missing field from the facts, and none of them
+  gets a value. Revisions work as before.
 - **Critic:** title length is checked by code, so the critic no longer gets
-  the measured length. Each issue cites one of these rules:
+  the measured length. Title wording is left to the generator prompt and the
+  human decision. Each issue cites one of these rules:
   - **R1.** Every characteristic in the draft appears in the facts, with a
     value the facts support.
   - **R2.** The draft lists every missing field from the facts and gives none
@@ -260,15 +275,14 @@ llm_call_completed model=… latency_s=… …
 
 - **Setting:** `CARD_CONFIDENCE_THRESHOLD`, default 0.7, between 0 and 1. It is
   a tuning setting with a default in code, so it is not in `.env.example`.
-- **Decision:** `route_draft(verdict, confidence, threshold)` in
-  `pipeline.py` returns the status a draft ends in: `awaiting_approval` when
-  the last verdict is `pass` and confidence is at or above the threshold,
-  otherwise `needs_review`. The preview and the workflow both call it. It is
-  pure, with no I/O and no settings, so workflow code can import it.
-- **Workflow input** gains a required `confidence_threshold`.
-  `start_card_workflow` in `temporal/client.py` sets it from settings, because
-  workflow code can't read settings. The history keeps the value the job ran
-  with.
+- **Status choice:** a draft ends in `awaiting_approval` when the last
+  verdict is `pass` and confidence is at or above the threshold, otherwise in
+  `needs_review`. One pure function makes this choice, and the preview and
+  the workflow both call it, so they can't disagree. It does no I/O and reads
+  no settings, so workflow code can call it.
+- **Workflow input** gains a required `confidence_threshold`, set from
+  settings when the job starts, because workflow code can't read settings.
+  The history keeps the value the job ran with.
 - **Once, after the revision loop.** Low confidence does not end the loop
   early: revisions can't add missing data, but the critic may still have
   issues worth fixing.
@@ -322,24 +336,27 @@ meanings change:
 
 ## Verification
 
-- **OUT-1:** schema unit tests cover required fields, non-blank text, each
-  length limit, the order of the empty-value move, missing-field cleaning and
-  the one-list rule on facts and drafts, the confidence formula including
-  empty lists, and a schema sent to the model that has no length limits.
+- **OUT-1:** schema unit tests cover required fields, non-blank text and
+  characteristic names, dropped blank list items, each length limit, the order
+  of the empty-value move, missing-field cleaning and the one-list rule on
+  facts and drafts, a `revise` without issues, the confidence formula
+  including empty lists, and a schema sent to the model that has no length
+  limits.
 - **OUT-2:** `json_utils` unit tests cover plain JSON, fenced JSON, JSON with
   text before and after it, garbage, a top-level array and an empty reply.
 - **OUT-3:** `structured` unit tests with a substituted client: invalid JSON
-  leads to a second request that carries the error; an exhausted budget raises
-  `InvalidModelOutputError` with the last errors; empty replies are repaired
-  and then fail.
+  leads to a second request that carries the error; a budget spent on output
+  repairs and field fixes together raises `InvalidModelOutputError` with the
+  last errors; empty replies are repaired and then fail; an output repair
+  after a field fix shows the merged object.
 - **OUT-4:** a reply whose title is too long leads to a request for `title`
-  only, with a response schema that holds only `title`. A fix reply that can't
-  be read keeps the current object and repeats the field fix. The final draft
+  only, with a response schema that holds only `title`. A field-fix reply
+  that can't be read keeps the current object and repeats the field fix. The final draft
   keeps the original description, and the captured logs show a field fix for
   `title`.
 - **OUT-5:** the one-list rule triggers an output repair. The critic's checks
   against the facts are verified manually on sparse input.
-- **OUT-6:** unit tests for the routing function (pass at, above and below the
+- **OUT-6:** unit tests for the status choice (pass at, above and below the
   threshold; revise). A pipeline test turns sparse facts into a preview whose
   draft has non-empty missing fields and confidence below the threshold, with
   status `needs_review`. A workflow test ends a passed draft with low

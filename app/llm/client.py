@@ -7,6 +7,8 @@ import openai
 from openai.types.chat import ChatCompletionMessageParam
 from openai.types.shared_params import ResponseFormatJSONSchema
 from pydantic import BaseModel
+from pydantic.json_schema import GenerateJsonSchema, JsonSchemaValue
+from pydantic_core import core_schema
 from tenacity import (
     AsyncRetrying,
     RetryCallState,
@@ -47,7 +49,7 @@ class LlmRequestError(UpstreamError):
 class ChatMessage(BaseModel):
     """One message of a model conversation"""
 
-    role: Literal["system", "user"]
+    role: Literal["system", "user", "assistant"]
     content: str
 
 
@@ -116,6 +118,19 @@ def log_retry(retry_state: RetryCallState) -> None:
     )
 
 
+class SchemaWithoutLengthLimits(GenerateJsonSchema):
+    """Generates JSON schemas whose strings have no maximum length"""
+
+    # A model server that enforces maxLength while decoding cuts the text
+    # mid-word, so validation never sees the long value and can't ask for a
+    # fix. Prompts state the limits and the schemas check them.
+    def str_schema(self, schema: core_schema.StringSchema) -> JsonSchemaValue:
+        """Return the string's JSON schema without its maximum length"""
+        json_schema = super().str_schema(schema)
+        json_schema.pop("maxLength", None)
+        return json_schema
+
+
 def build_response_format(
     response_schema: type[BaseModel],
 ) -> ResponseFormatJSONSchema:
@@ -124,7 +139,9 @@ def build_response_format(
         "type": "json_schema",
         "json_schema": {
             "name": response_schema.__name__,
-            "schema": response_schema.model_json_schema(),
+            "schema": response_schema.model_json_schema(
+                schema_generator=SchemaWithoutLengthLimits
+            ),
         },
     }
 

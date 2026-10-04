@@ -27,7 +27,7 @@ COMPLETION_BODY = {
 }
 
 
-def script_server(
+def stub_model_server(
     monkeypatch: pytest.MonkeyPatch,
     replies: list[httpx2.Response | Exception],
 ) -> tuple[list[httpx2.Request], list[float]]:
@@ -75,7 +75,7 @@ async def test_complete_waits_retry_after_then_succeeds(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A 429 is retried once, after the Retry-After delay"""
-    requests, waits = script_server(
+    requests, waits = stub_model_server(
         monkeypatch,
         [
             httpx2.Response(429, headers={"Retry-After": str(RETRY_AFTER_S)}),
@@ -94,7 +94,9 @@ async def test_complete_does_not_retry_bad_request(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A 400 fails at once with LlmRequestError"""
-    requests, _ = script_server(monkeypatch, [httpx2.Response(400, json={})])
+    requests, _ = stub_model_server(
+        monkeypatch, [httpx2.Response(400, json={})]
+    )
 
     with pytest.raises(LlmRequestError):
         await complete_messages()
@@ -110,7 +112,7 @@ async def test_complete_gives_up_on_connection_errors(
     refused: list[httpx2.Response | Exception] = [
         httpx2.ConnectError("connection refused") for _ in range(max_calls)
     ]
-    requests, _ = script_server(monkeypatch, refused)
+    requests, _ = stub_model_server(monkeypatch, refused)
 
     with pytest.raises(LlmUnavailableError):
         await complete_messages()

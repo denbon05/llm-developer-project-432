@@ -84,6 +84,8 @@ class CardWorkflowInput(BaseModel):
 
     job_id: UUID
     supplier_text: str
+    # Set from settings when the job starts: workflow code can't read them.
+    confidence_threshold: float
 
 
 class CardWorkflowState(BaseModel):

@@ -25,8 +25,9 @@ with workflow.unsafe.imports_passed_through():
     )
     from app.services.pipeline import (
         MAX_GENERATION_ATTEMPTS,
-        InvalidModelOutputError,
+        choose_draft_status,
     )
+    from app.services.structured import InvalidModelOutputError
     from app.temporal.activities import (
         critique_draft,
         extract_facts,
@@ -103,7 +104,7 @@ class CardGenerationWorkflow:
     async def run(self, job: CardWorkflowInput) -> JobStatus:
         """Make the card draft, wait for a decision, and return the outcome"""
         try:
-            await self.make_draft(job.supplier_text)
+            await self.make_draft(job)
             # Waiting costs no worker slot, however long it lasts.
             await workflow.wait_condition(lambda: self.decision is not None)
             assert self.decision is not None  # wait guarantees it, type check
@@ -115,7 +116,7 @@ class CardGenerationWorkflow:
             raise
         return self.status
 
-    async def make_draft(self, supplier_text: str) -> None:
+    async def make_draft(self, job: CardWorkflowInput) -> None:
         """Run the pipeline stages and record where the draft ends up"""
         # The same loop as services/pipeline.py, written twice on purpose:
         # replayed workflow code must stay free of I/O and logging concerns.
@@ -123,13 +124,14 @@ class CardGenerationWorkflow:
         await self.record_status(JobStatus.EXTRACTING)
         facts = await workflow.execute_activity(
             extract_facts,
-            supplier_text,
+            job.supplier_text,
             start_to_close_timeout=EXTRACT_START_TO_CLOSE_TIMEOUT,
             retry_policy=EXTRACT_RETRY_POLICY,
         )
         draft: CardDraft | None = None
         # Starting at "revise": running out of rounds needs no special case.
-        last_critique = Critique(verdict="revise")
+        # model_construct skips the check that a revise verdict lists issues.
+        last_critique = Critique.model_construct(verdict="revise")
         while (
             last_critique.verdict == "revise"
             and self.attempt < MAX_GENERATION_ATTEMPTS
@@ -153,10 +155,12 @@ class CardGenerationWorkflow:
                 start_to_close_timeout=CRITIQUE_START_TO_CLOSE_TIMEOUT,
                 retry_policy=CRITIQUE_RETRY_POLICY,
             )
+        assert draft is not None  # the loop runs at least once
+        status = choose_draft_status(
+            last_critique.verdict, draft.confidence, job.confidence_threshold
+        )
         await self.record_status(
-            JobStatus.AWAITING_APPROVAL
-            if last_critique.verdict == "pass"
-            else JobStatus.NEEDS_REVIEW,
+            JobStatus(status),
             result=draft,
             critique_issues=last_critique.issues,
         )

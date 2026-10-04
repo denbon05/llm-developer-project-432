@@ -11,30 +11,41 @@ from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
 
 from app.llm.client import LlmUnavailableError
-from app.schemas.cards import CardDraft, Critique, SupplierFacts
+from app.schemas.cards import CardDraft, Critique, SeoBlock, SupplierFacts
 from app.schemas.jobs import (
     CardWorkflowInput,
     JobStatus,
     JobStatusUpdate,
     RejectRequest,
 )
-from app.services.pipeline import (
-    MAX_GENERATION_ATTEMPTS,
-    InvalidModelOutputError,
-)
+from app.services.pipeline import MAX_GENERATION_ATTEMPTS
+from app.services.structured import InvalidModelOutputError
 from app.temporal.workflows import CardGenerationWorkflow
 
 TASK_QUEUE = "test-card-generation"
 SUPPLIER_TEXT = "Immersion blender MixerPro 800. Power 800 W."
+CONFIDENCE_THRESHOLD = 0.7
 FACTS = SupplierFacts(
-    product_name="MixerPro 800", characteristics={"Power": "800 W"}
+    product_name="MixerPro 800",
+    characteristics={"Power": "800 W"},
+    missing_fields=[],
 )
 DRAFT = CardDraft(
     title="MixerPro 800 immersion blender, 800 W",
     description="An 800 W immersion blender.",
+    characteristics={"Power": "800 W"},
+    benefits=["Enough power for ice"],
+    seo=SeoBlock(
+        meta_title="MixerPro 800 immersion blender",
+        meta_description="An 800 W immersion blender.",
+        keywords=["immersion blender"],
+    ),
+    missing_fields=[],
 )
+# Confidence 0.5: one characteristic found, one missing
+SPARSE_DRAFT = DRAFT.model_copy(update={"missing_fields": ["Warranty"]})
 PASS = Critique(verdict="pass")
-REVISE = Critique(verdict="revise", issues=["R4: title lacks the product type"])
+REVISE = Critique(verdict="revise", issues=["R3: the description adds a claim"])
 REJECT_REASON = "The description is too short."
 STATUS_WAIT_TIMEOUT_S = 10
 STATUS_POLL_INTERVAL_S = 0.05
@@ -46,6 +57,7 @@ def build_stub_activities(
     critiques: list[Critique | Exception],
     updates: list[JobStatusUpdate],
     generation_errors: list[Exception] | None = None,
+    draft: CardDraft = DRAFT,
 ) -> tuple[
     list[StubActivity],
     list[str],
@@ -72,7 +84,7 @@ def build_stub_activities(
         generation_error = next(remaining_generation_errors, None)
         if generation_error is not None:
             raise generation_error
-        return DRAFT
+        return draft
 
     @activity.defn(name="critique_draft")
     async def critique_draft(
@@ -110,11 +122,17 @@ def build_worker(
     )
 
 
-async def start_workflow(env: WorkflowEnvironment) -> WorkflowHandle:
+async def start_workflow(
+    env: WorkflowEnvironment, confidence_threshold: float = CONFIDENCE_THRESHOLD
+) -> WorkflowHandle:
     """Start a workflow for a new job"""
     return await env.client.start_workflow(
         CardGenerationWorkflow.run,
-        CardWorkflowInput(job_id=uuid4(), supplier_text=SUPPLIER_TEXT),
+        CardWorkflowInput(
+            job_id=uuid4(),
+            supplier_text=SUPPLIER_TEXT,
+            confidence_threshold=confidence_threshold,
+        ),
         id=f"test-{uuid4()}",
         task_queue=TASK_QUEUE,
     )
@@ -208,6 +226,34 @@ async def test_workflow_needs_review_then_rejects(
     assert updates[-1].decision_reason == REJECT_REASON
 
 
+@pytest.mark.parametrize(
+    ("confidence_threshold", "status"),
+    [
+        (CONFIDENCE_THRESHOLD, JobStatus.NEEDS_REVIEW),
+        (SPARSE_DRAFT.confidence, JobStatus.AWAITING_APPROVAL),
+    ],
+    ids=["below threshold", "at threshold"],
+)
+async def test_workflow_routes_passed_draft_by_input_threshold(
+    env: WorkflowEnvironment, confidence_threshold: float, status: JobStatus
+) -> None:
+    """A passed draft below the input's threshold waits in needs_review"""
+    updates: list[JobStatusUpdate] = []
+    handle = await start_workflow(env, confidence_threshold)
+    # Queued before the worker starts, so the workflow completes once it
+    # records the routed status.
+    await handle.signal(CardGenerationWorkflow.approve)
+
+    activities, _, _ = build_stub_activities(
+        [PASS], updates, draft=SPARSE_DRAFT
+    )
+    async with build_worker(env, activities):
+        await handle.result()
+
+    assert updates[-2].status == status
+    assert updates[-2].result == SPARSE_DRAFT
+
+
 async def test_workflow_retries_generation_without_repeating_extraction(
     env: WorkflowEnvironment,
 ) -> None:
@@ -239,7 +285,7 @@ async def test_workflow_records_failed_when_activity_fails(
 ) -> None:
     """A failed activity is recorded as failed, and the workflow fails"""
     updates: list[JobStatusUpdate] = []
-    error = InvalidModelOutputError(Critique)
+    error = InvalidModelOutputError(Critique, ["verdict: Field required"])
     activities, _, _ = build_stub_activities([error], updates)
 
     # Invalid model output is a non-retryable activity failure, surfaced by

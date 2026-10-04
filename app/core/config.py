@@ -2,6 +2,7 @@ from functools import cache
 from typing import Self
 
 from pydantic import (
+    Field,
     NonNegativeInt,
     PositiveFloat,
     PositiveInt,
@@ -35,6 +36,8 @@ class Settings(BaseSettings):
     llm_generate_max_retries: NonNegativeInt = 2
     llm_critique_timeout_s: PositiveFloat = 45
     llm_critique_max_retries: NonNegativeInt = 1
+    # A draft below it waits in needs_review even when the critic passed it
+    card_confidence_threshold: float = Field(default=0.7, ge=0, le=1)
 
     model_config = SettingsConfigDict(
         env_file=".env",

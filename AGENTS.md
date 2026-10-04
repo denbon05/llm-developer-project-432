@@ -30,7 +30,7 @@
 
 - Function names are verbs. Boolean names start with `is_`, `has_`, `can_`,
   `should_` or `was_`.
-- No magic numbers or strings: use a named constant, following the file's
+- No magic numbers or strings if used 2+ times: use a named constant, following the file's
   existing style.
 - Read the target file and its neighbours first, and reuse existing names and
   helpers.

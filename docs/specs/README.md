@@ -14,7 +14,7 @@ Architecture decisions live in [`docs/adr/`](../adr/). Domain vocabulary lives i
 | 01 | [Product overview](01-product-overview.md) | Problem, promises, principles, system shape | accepted |
 | 02 | [Platform foundation](02-platform-foundation.md) | Postgres + pgvector, Temporal, migrations, pool, health, tests, CI | accepted |
 | 03 | [Generation pipeline](03-generation-pipeline.md) | LLM client, three-role pipeline, jobs, durable workflow, human approval | accepted |
-| 04 | [Structured output](04-structured-output.md) | Card contract, tolerant reading, output repair, field fixes, confidence routing, input language | accepted |
+| 04 | [Structured output](04-structured-output.md) | Card contract, tolerant reading, output repair, field fixes, confidence routing, input language | implemented |
 | 05 | Document ingestion | pdf/docx/xlsx parsing, normalisation, chunking, document states | planned |
 | 06 | Embeddings and search | Local embeddings, pgvector, keyword and hybrid search | planned |
 | 07 | Grounded generation | Retrieval-backed generation, citation verification, end-to-end flow | planned |
@@ -44,6 +44,14 @@ A feature spec is a software design contract. It contains:
 6. **Verification**: each requirement traced to an automated or manual check.
 7. **Acceptance criteria**: a short, checkable definition of done.
 8. **Open questions**: unresolved design choices only.
+
+A spec describes behaviour and the contracts other parts rely on, not the code
+that implements them. It names something only when other code, tests, clients
+or operators depend on the name: modules from the layout, API and model fields,
+stored data, settings, log events, Temporal activities and queries, and error
+types that reach clients. A value that is a decision, such as a limit or a
+budget, is stated; the constant that holds it is not named. Internal functions
+and helpers are left to the code, so renaming one never changes a spec.
 
 Operational commands and examples belong in the root README. Decisions that
 need their alternatives and consequences preserved belong in `docs/adr/`.

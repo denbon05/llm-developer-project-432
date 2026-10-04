@@ -80,9 +80,12 @@ curl -s -X POST localhost:8000/api/v1/jobs/<id>/approve
 curl -s localhost:8000/api/v1/jobs/<id>/workflow   # Temporal's view of the job
 ```
 
-Repeating a request with the same `Idempotency-Key` returns the same job.
-`POST /api/v1/cards` with the same body runs the pipeline inside the request
-and returns the draft directly; with a local model it can take minutes.
+Repeating a request with the same `Idempotency-Key` returns the same job. A
+job waits in `awaiting_approval` only when the critic passed its draft and the
+draft's confidence meets `CARD_CONFIDENCE_THRESHOLD`; otherwise
+it waits in `needs_review`. `POST /api/v1/cards` with the same body runs the
+pipeline inside the request and returns the draft with the status a job would
+end in; with a local model it can take minutes.
 
 Interactive API docs are served at <http://localhost:8000/docs>. The Temporal
 UI is at <http://localhost:8233>.

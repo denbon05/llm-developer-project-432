@@ -109,13 +109,18 @@ async def ensure_temporal_serving() -> None:
 @translate_temporal_errors
 async def start_card_workflow(job_id: UUID, supplier_text: str) -> None:
     """Start the job's workflow unless it already exists"""
+    settings = get_settings()
     client = await get_temporal_client()
     try:
         await client.start_workflow(
             CardGenerationWorkflow.run,
-            CardWorkflowInput(job_id=job_id, supplier_text=supplier_text),
+            CardWorkflowInput(
+                job_id=job_id,
+                supplier_text=supplier_text,
+                confidence_threshold=settings.card_confidence_threshold,
+            ),
             id=build_workflow_id(job_id),
-            task_queue=get_settings().temporal_task_queue,
+            task_queue=settings.temporal_task_queue,
             id_reuse_policy=WorkflowIDReusePolicy.REJECT_DUPLICATE,
         )
     # A replayed request finds the workflow its first attempt started.

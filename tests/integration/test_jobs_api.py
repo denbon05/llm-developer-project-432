@@ -104,9 +104,7 @@ async def test_create_job_retries_pending_job_after_temporal_recovers(
     monkeypatch.setattr(jobs_router, "start_card_workflow", start_workflow)
     # Idempotency key links the second request to the pending
     # job, preventing duplicates.
-    recovered = await api_client.post(
-        JOBS_URL, json=BODY, headers=KEY_HEADERS
-    )
+    recovered = await api_client.post(JOBS_URL, json=BODY, headers=KEY_HEADERS)
 
     recovered_job_id = UUID(recovered.json()["id"])
     assert failed.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
