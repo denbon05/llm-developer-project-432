@@ -13,7 +13,7 @@ Turn the application skeleton into a platform that later features can build on:
 - liveness and readiness probes;
 - test infrastructure that runs against real, disposable databases;
 - CI on every push;
-- the supplier document set committed to `data/`.
+- the supplier document set committed to `evals/datasets/`.
 
 ## Non-goals
 
@@ -41,7 +41,7 @@ app/
 ├── parsers/       pdf.py, docx.py, xlsx.py, normalizer.py, chunker.py
 ├── guardrails/    pii.py, injection.py
 ├── repositories/  jobs.py, documents.py, chunks.py, llm_calls.py
-├── schemas/       cards.py, jobs.py
+├── schemas/       cards.py, jobs.py, documents.py
 └── temporal/      workflows.py, activities.py, client.py, worker.py
 db/migrations/
 evals/
@@ -115,11 +115,10 @@ name. Tuning settings have defaults in code and can still be overridden.
 Readiness allows the database 2 seconds; a slower answer counts as
 unavailable. Step 03 adds a Temporal check.
 
-### Supplier document set (`data/`)
+### Supplier document set (`evals/datasets/`)
 
-The supplier documents and the evaluation reference are committed to `data/`,
-translated to English, with their original file names. They keep the traits
-later stages must handle:
+The supplier documents are committed to `evals/datasets/` with their original
+file names. They keep the traits later stages must handle:
 
 - [ ] Contact details in the commercial offer stay in their exact format:
       phone numbers, emails, taxpayer IDs and registration numbers.
@@ -130,6 +129,11 @@ later stages must handle:
 - [ ] Numbers embedded in SKUs are not characteristics: `VCS-180` still has a
       documented power of `500 W`.
 - [ ] Reference values use the same wording and units as the documents.
+- [ ] `fan_passport_fan_45_scan.pdf` has no text layer. It is
+      `fan_passport_fan_45.pdf` rendered at 150 dpi in grayscale and saved as
+      an image-only PDF.
+- [ ] `blender_kp_ru.docx` and `coffee_passport_cfe_1000.pdf` stay in
+      Russian, their original language.
 
 An optional bulk set for load testing goes to `data/bulk/` and is not
 committed.
@@ -177,7 +181,7 @@ are exercised by the manual checks.
    *(manual)*
 4. With `db` stopped, `GET /health/live` returns 200 and `GET /health/ready`
    returns 503. *(manual + test)*
-5. `data/` contains the translated document set with original file names, and
+5. `evals/datasets/` contains the document set with original file names, and
    every item on the checklist is ticked. *(manual)*
 6. `make check` passes locally, and CI is green. *(test)*
 

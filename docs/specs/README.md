@@ -15,7 +15,7 @@ Architecture decisions live in [`docs/adr/`](../adr/). Domain vocabulary lives i
 | 02 | [Platform foundation](02-platform-foundation.md) | Postgres + pgvector, Temporal, migrations, pool, health, tests, CI | accepted |
 | 03 | [Generation pipeline](03-generation-pipeline.md) | LLM client, three-role pipeline, jobs, durable workflow, human approval | accepted |
 | 04 | [Structured output](04-structured-output.md) | Card contract, tolerant reading, output repair, field fixes, confidence routing, input language | implemented |
-| 05 | Document ingestion | pdf/docx/xlsx parsing, normalisation, chunking, document states | planned |
+| 05 | [Document ingestion](05-document-ingestion.md) | Upload, pdf/docx/xlsx parsing, normalisation, chunking, document status, ingestion workflow | accepted |
 | 06 | Embeddings and search | Local embeddings, pgvector, keyword and hybrid search | planned |
 | 07 | Grounded generation | Retrieval-backed generation, citation verification, end-to-end flow | planned |
 | 08 | Cost, tracing, evaluation | LLM call ledger, two-model policy, trace IDs, call labels in logs, strict output mode, quality metrics | planned |

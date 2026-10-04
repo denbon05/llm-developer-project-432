@@ -62,7 +62,7 @@ client ──HTTP──▶ API (FastAPI) ──▶ PostgreSQL + pgvector
 
 ## Language
 
-Code, prompts, API field names, documentation and `data/` are in English.
+Code, prompts, API field names and documentation are in English.
 Supplier facts and card drafts use the language of the supplier input.
 
 ## Non-goals

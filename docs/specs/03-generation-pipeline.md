@@ -128,8 +128,10 @@ One workflow per job, ID `card-job-{job_id}`, with four activities:
   `reject(reason)` signal, logs and ignores later ones, records `approved` or
   `rejected` and completes.
 - **Query:** `get_state()` returns the status, attempt and whether decided.
-- **Worker:** registers the workflow and four activities, has a thread pool
-  for future synchronous activities, and stops cleanly on SIGINT/SIGTERM.
+- **Worker:** registers the workflow and four activities on the
+  `card-generation` queue and stops cleanly on SIGINT/SIGTERM. Every activity
+  is `async def`, so it needs no thread pool. The same process also serves
+  document ingestion ([05](05-document-ingestion.md#worker)).
 
 ### HTTP API
 
