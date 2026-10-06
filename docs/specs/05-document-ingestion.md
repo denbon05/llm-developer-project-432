@@ -1,6 +1,6 @@
 # 05 · Document ingestion
 
-**Status:** accepted
+**Status:** implemented
 
 ## Context
 
@@ -45,9 +45,9 @@ explanation would look like a broken service.
 - **ING-9 — Untrusted input:** an upload is checked before it is stored, an
   archive's unpacked size is checked before it is opened, and chunk text
   never reaches the logs.
-- **ING-10 — Testability:** parsing is verified on the committed document
-  set. Tests need neither a model server nor the developer's Compose
-  database.
+- **ING-10 — Testability:** parsing is verified on real supplier documents
+  kept as test fixtures, apart from the evaluation set. Tests need neither a
+  model server nor the developer's Compose database.
 
 ## Non-goals
 
@@ -81,7 +81,7 @@ reason for each rule in a short comment.
 POST /documents ─▶ upload checks ─▶ documents repository
                                        └─▶ DocumentIngestionWorkflow
                                              ├─▶ record_document_status ─▶ documents repository
-                                             └─▶ parse_document ─▶ documents service
+                                             └─▶ chunk_document ─▶ documents service
                                                                      ├─▶ documents repository   load the file
                                                                      ├─▶ parsers, in a thread   parse, normalise, chunk
                                                                      └─▶ chunks repository      replace the chunks
@@ -93,7 +93,9 @@ The modules come from the
 [platform layout](02-platform-foundation.md#module-layout):
 
 - `routers/documents.py` and `services/documents.py`;
-- `parsers/`: `pdf.py`, `docx.py`, `xlsx.py`, `normalizer.py`, `chunker.py`;
+- `parsers/`: `pdf.py`, `docx.py`, `xlsx.py`, `normalizer.py`, `chunker.py`,
+  and `blocks.py`, which holds the [section](#sections) rule PDF and DOCX
+  share;
 - `repositories/documents.py` and `repositories/chunks.py`;
 - `schemas/documents.py`: the API models, the document status, the workflow
   input, and the parsed block that parsers pass to the normaliser and the
@@ -172,7 +174,7 @@ citations never need to know where a chunk came from. For example, the
 
 A document's chunk count is computed when the document is read; there is no
 counter column. Replacing a document's chunks is one transaction that deletes
-the old chunks and inserts the new ones. A retried `parse_document`
+the old chunks and inserts the new ones. A retried `chunk_document`
 therefore leaves exactly one set.
 
 ### Parsing
@@ -193,42 +195,46 @@ table (column headers, and rows with their row numbers).
 - A page without text is skipped and counted in the log. If no page has
   text, the document is unreadable: "the PDF has no text layer; it may be a
   scan, and OCR is not supported".
-- A file pdfplumber can't open, including an encrypted one, is unreadable:
-  "the file is not a readable PDF".
+- A file pdfplumber can't open or read, including an encrypted one, is
+  unreadable: "the file is not a readable PDF".
 
 #### DOCX
 
 - python-docx reads the paragraphs and tables of the body in document order.
   Page headers and footers are stored as separate parts of the file and are
-  not read.
+  not read. Blank paragraphs are skipped, so they don't split a group of
+  headings.
 - A **heading** is a paragraph styled `Title` or `Heading 1`–`Heading 9`.
   python-docx reports built-in style names in English, whatever the language
   of the Word installation that saved the file.
 - **Page:** DOCX stores no page numbers. The page is 1 plus the number of
-  page breaks before the paragraph or table. When Word last laid out the
-  file, it recorded where each page began (`lastRenderedPageBreak`). If the
+  page breaks before the first text of the paragraph or table. When Word
+  last laid out the file, it recorded where each page began
+  (`lastRenderedPageBreak`), inside the paragraph that opens the page. If the
   file has these marks, only they count; otherwise explicit page breaks
   count. The result is approximate, and a generated file without breaks is
   page 1 throughout.
 - A table's first row holds its column headers. A cell's text is its
   paragraphs joined with spaces. A merged cell's text appears under every
   column it spans.
-- A file python-docx can't open is unreadable: "the file is not a readable
-  DOCX".
+- A file python-docx can't open or read is unreadable: "the file is not a
+  readable DOCX".
 
 #### XLSX
 
 - openpyxl reads the cell values of each visible sheet in read-only mode; a
   formula yields its last saved value. Hidden sheets are skipped.
 - On each sheet, the first row with a non-empty cell holds the column
-  headers, and every later non-empty row is a table row.
+  headers, and every later non-empty row is a table row. Columns left of the
+  table, empty in every row, are not read, so the table's first column is
+  its first column with a value.
 - Values become text: whole numbers without `.0` (`35`, not `35.0`), other
   numbers in their shortest form (`2.4`), dates as ISO dates, and text
   trimmed. A formula without a saved value counts as an empty cell.
 - The section is the sheet name, and the page is the sheet's position in the
   workbook.
-- A file openpyxl can't open is unreadable: "the file is not a readable
-  XLSX".
+- A file openpyxl can't open or read is unreadable: "the file is not a
+  readable XLSX".
 
 #### Archive limit
 
@@ -236,11 +242,13 @@ DOCX and XLSX files are ZIP archives. Text XML compresses about tenfold, and
 a crafted archive (a "ZIP bomb") a few kilobytes long can unpack to
 gigabytes and exhaust the worker's memory.
 
-Before opening an archive, the parser reads its central directory: the list
-of its files with each file's unpacked size, read without unpacking
-anything. If the sizes add up to more than 100 MiB, the document is
-unreadable: "the archive unpacks to more than 100 MiB". A PDF is not an
-archive; the upload limit and the activity timeout bound it.
+Before the DOCX or XLSX parser opens an archive, the documents service reads
+its central directory: the list of its files with each file's unpacked size,
+read without unpacking anything. If the sizes add up to more than 100 MiB,
+the document is unreadable: "the archive unpacks to more than 100 MiB". An
+archive without a readable central directory can't be unpacked; its parser
+reports it unreadable. A PDF is not an archive; the upload limit and the
+activity timeout bound it.
 
 #### Sections
 
@@ -251,6 +259,8 @@ For PDF and DOCX:
   `VentBriz 40 Fan` gives the section `VentBriz 40 Fan`.
 - Headings stay in the text, at the start of the block they open. Otherwise a
   product name set as a heading would vanish from search.
+- A block that holds only headings, such as a heading right above a table,
+  gives no chunk: the heading already names the section of what follows.
 - Text before the first heading belongs to the first section.
 - A section continues across a page break. The new page starts a new block
   with the same section.
@@ -259,7 +269,7 @@ For PDF and DOCX:
 ### Normalisation (`normalizer.py`)
 
 These steps run in order on every text block. Steps 1 and 2 also run on
-every table cell.
+every table cell and section name.
 
 1. **Characters:** the ligatures `ﬀ ﬁ ﬂ ﬃ ﬄ ﬅ ﬆ` are expanded, and the text
    is converted to NFC form. NFKC is not used: it would also rewrite `m²` as
@@ -275,9 +285,9 @@ every table cell.
      p. 1`.
    - Only the first three and last three lines of a page are candidates.
    - Digits are masked when lines are compared, so `p. 1` and `p. 2` match.
-   - A line found on at least two pages, and on at least half of all pages,
-     is removed wherever it appears at a page edge. The same text inside a
-     page's body stays.
+   - A line found on at least two pages, and on at least half of the pages
+     with text, is removed wherever it appears at a page edge. The same text
+     inside a page's body stays.
    - The "at least two pages" condition protects a two-page document. Under
      a "most pages" rule, one page out of two would count as a majority, and
      every line would be removed.
@@ -302,8 +312,11 @@ A block left empty after normalisation is dropped.
   characters becomes one chunk.
 - A longer block is cut into chunks of at most 1,200 characters. A chunk ends
   at the last line break in its window, otherwise at the last sentence end,
-  otherwise at the last space. A chunk ends inside a word only when a single
-  word is longer than the window.
+  otherwise at the last space. A chunk ends inside a word only when one word
+  fills the rest of the window.
+- Only boundaries past the window's first 150 characters count. The previous
+  chunk ends within them, and cutting there again would move on by only a
+  word per chunk.
 - The next chunk starts 150 characters before the previous one ended, moved
   forward to the start of a word. A statement cut at a boundary therefore
   keeps its context in the next chunk.
@@ -359,9 +372,9 @@ is the document id only: the file never passes through Temporal
 | Activity | Does | Start-to-close | Max attempts |
 |----------|------|----------------|--------------|
 | `record_document_status` | writes the status | 10 s | 5 |
-| `parse_document` | loads the file, parses, normalises, chunks and replaces the chunks; returns the chunk count | 5 min | 3 |
+| `chunk_document` | loads the file, parses, normalises, chunks and replaces the chunks; returns the chunk count | 5 min | 3 |
 
-- **Algorithm:** record `parsing`, run `parse_document`, record `indexed`.
+- **Algorithm:** record `parsing`, run `chunk_document`, record `indexed`.
   When an activity fails for good, the workflow records `failed` with the
   cause's type and message (best effort), then fails, as a job's workflow
   does.
@@ -370,7 +383,7 @@ is the document id only: the file never passes through Temporal
   - `UnreadableDocumentError`, because the same file fails the same way;
   - a missing document;
   - a disallowed status transition.
-- **`parse_document`** is an `async def` activity:
+- **`chunk_document`** is an `async def` activity:
   - It loads the file in one database operation.
   - It runs parsing, normalisation and chunking through `asyncio.to_thread`.
     That work blocks and is CPU-bound; in a thread it leaves the worker's
@@ -414,6 +427,9 @@ is the document id only: the file never passes through Temporal
   current status (ING-2).
 - **Error kinds:** two kinds join `core/errors.py`. An exceeded size limit
   answers `413`, and an unsupported format answers `415`.
+  `UnreadableDocumentError` lives there too, because parsers, the service
+  and the workflow share it. It never answers a request: it ends a document
+  `failed`.
 - **Details:**
   - `413 {"detail": "file is larger than 10 MiB"}`, with the configured limit
     in the message;
@@ -425,8 +441,9 @@ is the document id only: the file never passes through Temporal
   uploads.
 - **Setting:** `DOCUMENT_MAX_SIZE_BYTES`, default 10 MiB (10,485,760).
 
-Like `TEMPORAL_DOCUMENT_TASK_QUEUE`, this is a tuning setting with a default
-in code, so it is not in `.env.example`.
+`DOCUMENT_MAX_SIZE_BYTES` and `TEMPORAL_DOCUMENT_TASK_QUEUE` are tuning
+settings ([02](02-platform-foundation.md#configuration)), so neither is in
+`.env.example`.
 
 ### Ingest command
 
@@ -448,8 +465,9 @@ worker. The default directory is `evals/datasets`. The command:
 The command serves two runs:
 
 - the committed set in `evals/datasets/`, as the reference run;
-- an optional bulk set in `data/bulk/`, which is not committed. It provides
-  load and checks the rules on documents they were not tuned on.
+- the optional bulk set in `data/bulk/`
+  ([02](02-platform-foundation.md#supplier-document-set-evalsdatasets)). It
+  provides load and checks the rules on documents they were not tuned on.
 
 ### Logs
 
@@ -496,7 +514,7 @@ UnreadableDocumentError: the document contains no text
 
 ### Durability
 
-- A worker lost during `parse_document` costs one attempt.
+- A worker lost during `chunk_document` costs one attempt.
 - The chunks are replaced in one transaction, so a lost attempt has written
   either nothing or a complete set, and the retry replaces it.
 - A document whose workflow never started stays `pending` until the same file
@@ -522,7 +540,7 @@ UnreadableDocumentError: the document contains no text
     retried and ends `failed` with its type and message; a transient error is
     retried.
   - Repository tests of the allowed status transitions.
-- **ING-4, ING-5, ING-7:** parser tests on the committed set:
+- **ING-4, ING-5, ING-7:** parser tests on the fixture documents:
   - `fan_passport_fan_40.pdf`: two pages. `Power 40 W` is in a page-1 chunk
     under `Technical specifications`. Page 2 holds `Package contents`,
     `Operating rules` and `Warranty obligations`. No chunk contains the
@@ -547,6 +565,7 @@ UnreadableDocumentError: the document contains no text
 - **ING-6:** chunker unit tests:
   - chunk size and overlap;
   - no cut inside a word;
+  - a short line before a long one is not repeated;
   - no chunk across a page or section;
   - a table row longer than 1,200 characters stays one chunk;
   - duplicates within a document are dropped;
@@ -556,8 +575,10 @@ UnreadableDocumentError: the document contains no text
   no-text-layer reason, and a document without text is unreadable.
 - **ING-9:** an archive whose files add up to more than 100 MiB is refused
   before anything is unpacked. Captured logs of a parse hold no chunk text.
-- **ING-10:** parser tests read files from `evals/datasets/`, database tests
-  use testcontainers, and no test calls a model.
+- **ING-10:** tests read only `tests/fixtures/documents/`: copies of the
+  files they use from `evals/datasets/`, so the evaluation set can change
+  without changing what the tests check. Database tests use testcontainers,
+  and no test calls a model.
 
 ## Acceptance criteria
 

@@ -10,6 +10,8 @@ from pydantic import (
 )
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+BYTES_PER_MIB = 1024 * 1024
+
 
 class Settings(BaseSettings):
     """Application settings loaded from the environment"""
@@ -24,6 +26,9 @@ class Settings(BaseSettings):
     temporal_address: str = "localhost:7233"
     temporal_namespace: str = "default"
     temporal_task_queue: str = "card-generation"
+    temporal_document_task_queue: str = "document-ingestion"
+    # Kept in the database row (docs/adr/0004-uploaded-files-in-postgres.md)
+    document_max_size_bytes: PositiveInt = 10 * BYTES_PER_MIB
     llm_base_url: str = "http://localhost:1234/v1"
     llm_api_key: str = "lm-studio"
     llm_model: str = "gemma-4-e4b-it"

@@ -15,6 +15,10 @@ run:
 worker:
 	uv run python -m app.temporal.worker
 
+# Needs the API and the worker running; dir defaults to evals/datasets
+ingest:
+	uv run python -m evals.ingest $(dir)
+
 migrate-up:
 	$(DBMATE) up
 

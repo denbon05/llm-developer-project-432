@@ -11,11 +11,14 @@ from app.core.errors import (
     ConflictError,
     InvalidRequestError,
     NotFoundError,
+    TooLargeError,
     UnavailableError,
+    UnsupportedFormatError,
     UpstreamError,
 )
 from app.core.logging import get_logger
 from app.routers.cards import router as cards_router
+from app.routers.documents import router as documents_router
 from app.routers.health import router as health_router
 from app.routers.jobs import router as jobs_router
 from app.routers.workflows import router as workflows_router
@@ -71,6 +74,12 @@ def create_app() -> FastAPI:
         InvalidRequestError, respond_with(HTTPStatus.UNPROCESSABLE_ENTITY)
     )
     application.add_exception_handler(
+        TooLargeError, respond_with(HTTPStatus.REQUEST_ENTITY_TOO_LARGE)
+    )
+    application.add_exception_handler(
+        UnsupportedFormatError, respond_with(HTTPStatus.UNSUPPORTED_MEDIA_TYPE)
+    )
+    application.add_exception_handler(
         UnavailableError, respond_with(HTTPStatus.SERVICE_UNAVAILABLE)
     )
     application.add_exception_handler(
@@ -80,6 +89,7 @@ def create_app() -> FastAPI:
     application.include_router(health_router)
     application.include_router(cards_router, prefix=API_PREFIX)
     application.include_router(jobs_router, prefix=API_PREFIX)
+    application.include_router(documents_router, prefix=API_PREFIX)
     application.include_router(workflows_router, prefix=API_PREFIX)
 
     return application

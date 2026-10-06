@@ -1,12 +1,11 @@
 import asyncio
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import Awaitable, Callable
 from typing import Any
 from uuid import uuid4
 
 import pytest
 from temporalio import activity
 from temporalio.client import WorkflowFailureError, WorkflowHandle
-from temporalio.contrib.pydantic import pydantic_data_converter
 from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
 
@@ -109,13 +108,13 @@ def build_stub_activities(
 
 
 def build_worker(
-    env: WorkflowEnvironment, activities: list[StubActivity]
+    temporal_env: WorkflowEnvironment, activities: list[StubActivity]
 ) -> Worker:
     """Return a worker for the real workflow and the given activities"""
     # This is a real Temporal worker connected to the test server. Only its
     # activities are replaced with local stubs.
     return Worker(
-        env.client,
+        temporal_env.client,
         task_queue=TASK_QUEUE,
         workflows=[CardGenerationWorkflow],
         activities=activities,
@@ -123,10 +122,11 @@ def build_worker(
 
 
 async def start_workflow(
-    env: WorkflowEnvironment, confidence_threshold: float = CONFIDENCE_THRESHOLD
+    temporal_env: WorkflowEnvironment,
+    confidence_threshold: float = CONFIDENCE_THRESHOLD,
 ) -> WorkflowHandle:
     """Start a workflow for a new job"""
-    return await env.client.start_workflow(
+    return await temporal_env.client.start_workflow(
         CardGenerationWorkflow.run,
         CardWorkflowInput(
             job_id=uuid4(),
@@ -147,24 +147,12 @@ async def wait_for_status(handle: WorkflowHandle, status: JobStatus) -> None:
             await asyncio.sleep(STATUS_POLL_INTERVAL_S)
 
 
-@pytest.fixture
-async def env() -> AsyncIterator[WorkflowEnvironment]:
-    """Temporal test server that skips time"""
-    # Awaiting starts an ephemeral Temporal server. Its virtual clock advances
-    # across workflow timers and retry delays instead of waiting in real time.
-    # The async context manager shuts the server down after each test.
-    async with await WorkflowEnvironment.start_time_skipping(
-        data_converter=pydantic_data_converter
-    ) as environment:
-        yield environment
-
-
 async def test_workflow_approves_and_ignores_second_decision(
-    env: WorkflowEnvironment,
+    temporal_env: WorkflowEnvironment,
 ) -> None:
     """A passed draft awaits approval, and only the first decision counts"""
     updates: list[JobStatusUpdate] = []
-    handle = await start_workflow(env)
+    handle = await start_workflow(temporal_env)
     # Both signals are in the history before any worker runs the workflow.
     await handle.signal(CardGenerationWorkflow.approve)
     await handle.signal(
@@ -173,7 +161,7 @@ async def test_workflow_approves_and_ignores_second_decision(
 
     activities, _, _ = build_stub_activities([PASS], updates)
     # Starting the worker processes the queued workflow and both signals.
-    async with build_worker(env, activities):
+    async with build_worker(temporal_env, activities):
         # The handle waits until the workflow completes with its final status.
         outcome = await handle.result()
 
@@ -190,7 +178,7 @@ async def test_workflow_approves_and_ignores_second_decision(
 
 
 async def test_workflow_needs_review_then_rejects(
-    env: WorkflowEnvironment,
+    temporal_env: WorkflowEnvironment,
 ) -> None:
     """Exhausted rounds await review, and a rejection ends the workflow"""
     updates: list[JobStatusUpdate] = []
@@ -201,8 +189,8 @@ async def test_workflow_needs_review_then_rejects(
 
     # Run all generation rounds, then wait until the revision budget is
     # exhausted before sending the human rejection.
-    async with build_worker(env, activities):
-        handle = await start_workflow(env)
+    async with build_worker(temporal_env, activities):
+        handle = await start_workflow(temporal_env)
         await wait_for_status(handle, JobStatus.NEEDS_REVIEW)
         # signal() waits for server acceptance, not workflow processing.
         await handle.signal(
@@ -235,11 +223,13 @@ async def test_workflow_needs_review_then_rejects(
     ids=["below threshold", "at threshold"],
 )
 async def test_workflow_routes_passed_draft_by_input_threshold(
-    env: WorkflowEnvironment, confidence_threshold: float, status: JobStatus
+    temporal_env: WorkflowEnvironment,
+    confidence_threshold: float,
+    status: JobStatus,
 ) -> None:
     """A passed draft below the input's threshold waits in needs_review"""
     updates: list[JobStatusUpdate] = []
-    handle = await start_workflow(env, confidence_threshold)
+    handle = await start_workflow(temporal_env, confidence_threshold)
     # Queued before the worker starts, so the workflow completes once it
     # records the routed status.
     await handle.signal(CardGenerationWorkflow.approve)
@@ -247,7 +237,7 @@ async def test_workflow_routes_passed_draft_by_input_threshold(
     activities, _, _ = build_stub_activities(
         [PASS], updates, draft=SPARSE_DRAFT
     )
-    async with build_worker(env, activities):
+    async with build_worker(temporal_env, activities):
         await handle.result()
 
     assert updates[-2].status == status
@@ -255,7 +245,7 @@ async def test_workflow_routes_passed_draft_by_input_threshold(
 
 
 async def test_workflow_retries_generation_without_repeating_extraction(
-    env: WorkflowEnvironment,
+    temporal_env: WorkflowEnvironment,
 ) -> None:
     """Retrying unfinished generation does not repeat completed extraction"""
     updates: list[JobStatusUpdate] = []
@@ -265,8 +255,8 @@ async def test_workflow_retries_generation_without_repeating_extraction(
         generation_errors=[RuntimeError("worker interrupted")],
     )
 
-    async with build_worker(env, activities):
-        handle = await start_workflow(env)
+    async with build_worker(temporal_env, activities):
+        handle = await start_workflow(temporal_env)
         # The first generation attempt fails, its retry succeeds, and the
         # critic passes the resulting draft before a human can approve it.
         await wait_for_status(handle, JobStatus.AWAITING_APPROVAL)
@@ -281,7 +271,7 @@ async def test_workflow_retries_generation_without_repeating_extraction(
 
 
 async def test_workflow_records_failed_when_activity_fails(
-    env: WorkflowEnvironment,
+    temporal_env: WorkflowEnvironment,
 ) -> None:
     """A failed activity is recorded as failed, and the workflow fails"""
     updates: list[JobStatusUpdate] = []
@@ -290,8 +280,8 @@ async def test_workflow_records_failed_when_activity_fails(
 
     # Invalid model output is a non-retryable activity failure, surfaced by
     # the workflow handle as WorkflowFailureError.
-    async with build_worker(env, activities):
-        handle = await start_workflow(env)
+    async with build_worker(temporal_env, activities):
+        handle = await start_workflow(temporal_env)
         with pytest.raises(WorkflowFailureError):
             await handle.result()
 
@@ -302,7 +292,7 @@ async def test_workflow_records_failed_when_activity_fails(
 
 
 async def test_workflow_does_not_retry_exhausted_model_retries(
-    env: WorkflowEnvironment,
+    temporal_env: WorkflowEnvironment,
 ) -> None:
     """Exhausted call retries fail the activity without another attempt"""
     updates: list[JobStatusUpdate] = []
@@ -313,8 +303,8 @@ async def test_workflow_does_not_retry_exhausted_model_retries(
         generation_errors=[error],
     )
 
-    async with build_worker(env, activities):
-        handle = await start_workflow(env)
+    async with build_worker(temporal_env, activities):
+        handle = await start_workflow(temporal_env)
         with pytest.raises(WorkflowFailureError):
             await handle.result()
 

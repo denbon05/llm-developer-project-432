@@ -3,6 +3,7 @@
 venv/
 .vscode/*
 !.vscode/settings.json
+!.vscode/extensions.json
 
 __pycache__/
 *.py[cod]
@@ -12,6 +13,7 @@ __pycache__/
 dist/
 build/
 docs/steps/
+data/bulk/
 CLAUDE.local.md
 
 .ruff_cache/

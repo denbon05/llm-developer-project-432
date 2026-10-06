@@ -5,6 +5,8 @@ import pytest
 from app.repositories import jobs as jobs_repository
 from app.schemas.jobs import JobCreate, JobStatus, JobStatusUpdate
 
+# Every test in this file gets the pool on the test database, and the
+# database is emptied after each test, so no rows leak between tests.
 pytestmark = pytest.mark.usefixtures("database_pool")
 
 REQUEST = JobCreate(

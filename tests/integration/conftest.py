@@ -4,6 +4,8 @@ from collections.abc import AsyncIterator, Callable, Iterator
 import asyncpg
 import httpx
 import pytest
+from temporalio.contrib.pydantic import pydantic_data_converter
+from temporalio.testing import WorkflowEnvironment
 from testcontainers.community.postgres import PostgresContainer
 
 from app.core.config import get_settings
@@ -68,7 +70,7 @@ async def test_database(
     yield
     conn = await asyncpg.connect(database_url)
     try:
-        await conn.execute("TRUNCATE jobs")
+        await conn.execute("TRUNCATE jobs, documents, chunks")
     finally:
         await conn.close()
 
@@ -96,3 +98,15 @@ async def api_client(test_database: None) -> AsyncIterator[httpx.AsyncClient]:
         ) as http_client,
     ):
         yield http_client
+
+
+@pytest.fixture
+async def temporal_env() -> AsyncIterator[WorkflowEnvironment]:
+    """Temporal test server that skips time"""
+    # Awaiting starts an ephemeral Temporal server. Its virtual clock advances
+    # across workflow timers and retry delays instead of waiting in real time.
+    # The async context manager shuts the server down after each test.
+    async with await WorkflowEnvironment.start_time_skipping(
+        data_converter=pydantic_data_converter
+    ) as environment:
+        yield environment

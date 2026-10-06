@@ -12,15 +12,20 @@ from temporalio.service import RPCError, RPCStatusCode
 
 from app.core.config import get_settings
 from app.core.errors import NotFoundError, UnavailableError
+from app.schemas.documents import DocumentWorkflowInput
 from app.schemas.jobs import (
     CardWorkflowInput,
     CardWorkflowState,
     RejectRequest,
     WorkflowView,
 )
-from app.temporal.workflows import CardGenerationWorkflow
+from app.temporal.workflows import (
+    CardGenerationWorkflow,
+    DocumentIngestionWorkflow,
+)
 
 WORKFLOW_ID_PREFIX = "card-job-"
+INGESTION_WORKFLOW_ID_PREFIX = "document-"
 HEALTH_CHECK_TIMEOUT_S = 2.0
 STATE_QUERY_TIMEOUT = timedelta(seconds=2)
 # How a query ends when no worker picks it up before the timeout
@@ -38,7 +43,7 @@ class TemporalUnavailableError(UnavailableError):
 
 
 class WorkflowNotFoundError(NotFoundError):
-    """Raised when Temporal does not find the job's workflow"""
+    """Raised when Temporal does not find the workflow"""
 
     message = "workflow not found"
 
@@ -124,6 +129,24 @@ async def start_card_workflow(job_id: UUID, supplier_text: str) -> None:
             id_reuse_policy=WorkflowIDReusePolicy.REJECT_DUPLICATE,
         )
     # A replayed request finds the workflow its first attempt started.
+    except WorkflowAlreadyStartedError:
+        pass
+
+
+@translate_temporal_errors
+async def start_ingestion_workflow(document_id: UUID) -> None:
+    """Start the document's ingestion workflow unless it already exists"""
+    settings = get_settings()
+    client = await get_temporal_client()
+    try:
+        await client.start_workflow(
+            DocumentIngestionWorkflow.run,
+            DocumentWorkflowInput(document_id=document_id),
+            id=f"{INGESTION_WORKFLOW_ID_PREFIX}{document_id}",
+            task_queue=settings.temporal_document_task_queue,
+            id_reuse_policy=WorkflowIDReusePolicy.REJECT_DUPLICATE,
+        )
+    # A repeated upload finds the workflow the first one started.
     except WorkflowAlreadyStartedError:
         pass
 

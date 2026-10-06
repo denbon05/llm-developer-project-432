@@ -38,7 +38,7 @@ app/
 ├── agents/        prompts.py
 ├── llm/           client.py, cost.py
 ├── rag/           embedder.py, retrieval.py, context.py, reindex.py
-├── parsers/       pdf.py, docx.py, xlsx.py, normalizer.py, chunker.py
+├── parsers/       pdf.py, docx.py, xlsx.py, blocks.py, normalizer.py, chunker.py
 ├── guardrails/    pii.py, injection.py
 ├── repositories/  jobs.py, documents.py, chunks.py, llm_calls.py
 ├── schemas/       cards.py, jobs.py, documents.py

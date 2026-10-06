@@ -46,6 +46,10 @@ In a second terminal:
 make migrate-up
 ```
 
+Optionally, put a larger set of supplier documents (PDF, DOCX, XLSX) into
+`data/bulk/` for load runs of `make ingest`. Git ignores the directory, so the
+files stay on the local machine.
+
 ## Usage
 
 The API needs the database up: it checks it at startup and exits with
@@ -80,12 +84,38 @@ curl -s -X POST localhost:8000/api/v1/jobs/<id>/approve
 curl -s localhost:8000/api/v1/jobs/<id>/workflow   # Temporal's view of the job
 ```
 
-Repeating a request with the same `Idempotency-Key` returns the same job. A
-job waits in `awaiting_approval` only when the critic passed its draft and the
-draft's confidence meets `CARD_CONFIDENCE_THRESHOLD`; otherwise
-it waits in `needs_review`. `POST /api/v1/cards` with the same body runs the
-pipeline inside the request and returns the draft with the status a job would
-end in; with a local model it can take minutes.
+Spec 03 describes [the job API](docs/specs/03-generation-pipeline.md#http-api),
+including the `Idempotency-Key` header, and spec 04
+[which status a draft waits in](docs/specs/04-structured-output.md#routing).
+`POST /api/v1/cards` with the same body returns the draft within the request;
+with a local model it can take minutes.
+
+Upload a supplier document, then poll it until ingestion ends:
+
+```bash
+curl -s -X POST localhost:8000/api/v1/documents \
+  -F 'file=@evals/datasets/fan_passport_fan_40.pdf'
+# {"id":"<id>","status":"pending"}
+curl -s localhost:8000/api/v1/documents/<id>   # poll until "indexed" or "failed"
+# {"id":"<id>","filename":"fan_passport_fan_40.pdf","format":"pdf","size_bytes":...,
+#  "status":"indexed","error":null,"chunk_count":5,"created_at":...,"updated_at":...}
+```
+
+Spec 05 lists the
+[accepted files](docs/specs/05-document-ingestion.md#upload-checks) and the
+[failure reasons](docs/specs/05-document-ingestion.md#failure-reasons).
+
+To ingest a whole directory, with the API and the worker running:
+
+```bash
+make ingest                  # every PDF, DOCX and XLSX in evals/datasets/
+make ingest dir=data/bulk    # the optional local bulk set
+```
+
+Spec 05 describes
+[its report and exit code](docs/specs/05-document-ingestion.md#ingest-command).
+For an API at another address, run
+`uv run python -m evals.ingest <dir> --api-url <url>`.
 
 Interactive API docs are served at <http://localhost:8000/docs>. The Temporal
 UI is at <http://localhost:8233>.
@@ -95,7 +125,8 @@ UI is at <http://localhost:8233>.
 | `make install` | create `.venv` and install locked dependencies |
 | `make infra` / `make down` | start PostgreSQL (pgvector) and Temporal / stop them |
 | `make run` | run the API on http://localhost:8000 with auto-reload |
-| `make worker` | run the Temporal worker that carries out jobs |
+| `make worker` | run the Temporal worker that carries out jobs and document ingestion |
+| `make ingest [dir=<path>]` | upload a directory's documents and report their ingestion (default `evals/datasets`) |
 | `make migrate-up` | apply pending migrations from `db/migrations/` (safe to repeat) |
 | `make migrate-status` / `make migrate-rollback` | list applied and pending migrations / roll back the latest one |
 | `make migration name=<slug>` | create a new migration file |

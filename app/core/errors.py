@@ -8,15 +8,15 @@ class ServiceError(Exception):
 
 
 class NotFoundError(ServiceError):
-    """Something the request names does not exist"""
+    """Something referred to does not exist"""
 
 
 class ConflictError(ServiceError):
-    """The request clashes with the current state"""
+    """An operation clashes with what is already stored"""
 
 
 class InvalidRequestError(ServiceError):
-    """The request is well formed but cannot be accepted"""
+    """Input is well formed but cannot be accepted"""
 
 
 class UnavailableError(ServiceError):
@@ -25,3 +25,16 @@ class UnavailableError(ServiceError):
 
 class UpstreamError(ServiceError):
     """A dependency answered with something unusable"""
+
+
+class TooLargeError(ServiceError):
+    """Input is larger than a limit allows"""
+
+
+class UnsupportedFormatError(ServiceError):
+    """Input is in a format that is not supported"""
+
+
+# Maps to no HTTP status: it never reaches a client.
+class UnreadableDocumentError(ServiceError):
+    """A document cannot be read, or yields no text"""

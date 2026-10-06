@@ -10,12 +10,22 @@ from temporalio.exceptions import (
 )
 
 with workflow.unsafe.imports_passed_through():
+    from app.core.errors import UnreadableDocumentError
     from app.llm.client import LlmRequestError, LlmUnavailableError
+    from app.repositories.documents import (
+        DocumentNotFoundError,
+        InvalidDocumentTransitionError,
+    )
     from app.repositories.jobs import (
         InvalidJobTransitionError,
         JobNotFoundError,
     )
     from app.schemas.cards import CardDraft, Critique
+    from app.schemas.documents import (
+        DocumentStatus,
+        DocumentStatusUpdate,
+        DocumentWorkflowInput,
+    )
     from app.schemas.jobs import (
         CardWorkflowInput,
         CardWorkflowState,
@@ -29,9 +39,11 @@ with workflow.unsafe.imports_passed_through():
     )
     from app.services.structured import InvalidModelOutputError
     from app.temporal.activities import (
+        chunk_document,
         critique_draft,
         extract_facts,
         generate_draft,
+        record_document_status,
         record_job_status,
     )
 
@@ -40,39 +52,65 @@ EXTRACT_START_TO_CLOSE_TIMEOUT = timedelta(minutes=3)
 GENERATE_START_TO_CLOSE_TIMEOUT = timedelta(minutes=8)
 GENERATE_SCHEDULE_TO_CLOSE_TIMEOUT = timedelta(minutes=25)
 CRITIQUE_START_TO_CLOSE_TIMEOUT = timedelta(minutes=2)
+CHUNK_START_TO_CLOSE_TIMEOUT = timedelta(minutes=5)
 RECORD_STATUS_TIMEOUT = timedelta(seconds=10)
 RETRY_INITIAL_INTERVAL = timedelta(seconds=2)
 RETRY_BACKOFF_COEFFICIENT = 2.0
 EXTRACT_MAX_ATTEMPTS = 2
 GENERATE_MAX_ATTEMPTS = 3
 CRITIQUE_MAX_ATTEMPTS = 2
+CHUNK_MAX_ATTEMPTS = 3
 RECORD_STATUS_MAX_ATTEMPTS = 5
+FAILED_STATUS_NOT_RECORDED = "Could not record the failed status"
 # The client already exhausted provider retries for LlmUnavailableError.
-NON_RETRYABLE_ERRORS = (
+CARD_NON_RETRYABLE_ERRORS = (
     InvalidModelOutputError,
     LlmRequestError,
     LlmUnavailableError,
     InvalidJobTransitionError,
     JobNotFoundError,
 )
+# An unreadable file fails the same way on every attempt, and a retry finds
+# a missing document or a disallowed transition unchanged.
+INGESTION_NON_RETRYABLE_ERRORS = (
+    UnreadableDocumentError,
+    DocumentNotFoundError,
+    InvalidDocumentTransitionError,
+)
 
 
-def build_retry_policy(maximum_attempts: int) -> RetryPolicy:
+def build_retry_policy(
+    maximum_attempts: int, non_retryable_errors: tuple[type[Exception], ...]
+) -> RetryPolicy:
     """Return the retry policy that stops after this many attempts"""
     return RetryPolicy(
         initial_interval=RETRY_INITIAL_INTERVAL,
         backoff_coefficient=RETRY_BACKOFF_COEFFICIENT,
         maximum_attempts=maximum_attempts,
         non_retryable_error_types=[
-            error.__name__ for error in NON_RETRYABLE_ERRORS
+            error.__name__ for error in non_retryable_errors
         ],
     )
 
 
-EXTRACT_RETRY_POLICY = build_retry_policy(EXTRACT_MAX_ATTEMPTS)
-GENERATE_RETRY_POLICY = build_retry_policy(GENERATE_MAX_ATTEMPTS)
-CRITIQUE_RETRY_POLICY = build_retry_policy(CRITIQUE_MAX_ATTEMPTS)
-RECORD_STATUS_RETRY_POLICY = build_retry_policy(RECORD_STATUS_MAX_ATTEMPTS)
+EXTRACT_RETRY_POLICY = build_retry_policy(
+    EXTRACT_MAX_ATTEMPTS, CARD_NON_RETRYABLE_ERRORS
+)
+GENERATE_RETRY_POLICY = build_retry_policy(
+    GENERATE_MAX_ATTEMPTS, CARD_NON_RETRYABLE_ERRORS
+)
+CRITIQUE_RETRY_POLICY = build_retry_policy(
+    CRITIQUE_MAX_ATTEMPTS, CARD_NON_RETRYABLE_ERRORS
+)
+RECORD_STATUS_RETRY_POLICY = build_retry_policy(
+    RECORD_STATUS_MAX_ATTEMPTS, CARD_NON_RETRYABLE_ERRORS
+)
+CHUNK_RETRY_POLICY = build_retry_policy(
+    CHUNK_MAX_ATTEMPTS, INGESTION_NON_RETRYABLE_ERRORS
+)
+RECORD_DOCUMENT_STATUS_RETRY_POLICY = build_retry_policy(
+    RECORD_STATUS_MAX_ATTEMPTS, INGESTION_NON_RETRYABLE_ERRORS
+)
 
 
 def describe_failure(error: ActivityError) -> str:
@@ -183,7 +221,7 @@ class CardGenerationWorkflow:
             )
         # The original error matters more than this one.
         except ActivityError:
-            workflow.logger.warning("Could not record the failed status")
+            workflow.logger.warning(FAILED_STATUS_NOT_RECORDED)
 
     @workflow.signal
     def approve(self) -> None:
@@ -211,3 +249,57 @@ class CardGenerationWorkflow:
             attempt=self.attempt,
             is_decided=self.decision is not None,
         )
+
+
+@workflow.defn
+class DocumentIngestionWorkflow:
+    """Carries out one ingestion: chunk the document, then mark it indexed"""
+
+    @workflow.init
+    def __init__(self, document: DocumentWorkflowInput) -> None:
+        self.document_id = document.document_id
+
+    @workflow.run
+    async def run(self, document: DocumentWorkflowInput) -> DocumentStatus:
+        """Chunk the document and record where its ingestion ends"""
+        try:
+            await self.record_status(DocumentStatus.PARSING)
+            # A worker lost midway costs one attempt: the retry starts here,
+            # not at the status write that already completed.
+            await workflow.execute_activity(
+                chunk_document,
+                document.document_id,
+                start_to_close_timeout=CHUNK_START_TO_CLOSE_TIMEOUT,
+                retry_policy=CHUNK_RETRY_POLICY,
+            )
+            # "Indexed" ends ingestion: the chunks are stored. The name is what
+            # the status means once 06 adds an embedding stage before it:
+            # ready for search.
+            await self.record_status(DocumentStatus.INDEXED)
+        except ActivityError as error:
+            await self.record_failure(error)
+            raise
+        return DocumentStatus.INDEXED
+
+    async def record_status(
+        self, status: DocumentStatus, error: str | None = None
+    ) -> None:
+        """Write the document's new status to the database"""
+        await workflow.execute_activity(
+            record_document_status,
+            DocumentStatusUpdate(
+                document_id=self.document_id, status=status, error=error
+            ),
+            start_to_close_timeout=RECORD_STATUS_TIMEOUT,
+            retry_policy=RECORD_DOCUMENT_STATUS_RETRY_POLICY,
+        )
+
+    async def record_failure(self, error: ActivityError) -> None:
+        """Record the document as failed, as far as the database allows"""
+        try:
+            await self.record_status(
+                DocumentStatus.FAILED, error=describe_failure(error)
+            )
+        # The original error matters more than this one.
+        except ActivityError:
+            workflow.logger.warning(FAILED_STATUS_NOT_RECORDED)
