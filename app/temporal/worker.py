@@ -3,12 +3,14 @@ import signal
 
 from temporalio.worker import Worker
 
+from app.core import db
 from app.core.bootstrap import bootstrap
-from app.core.db import close_pool, open_pool
 from app.core.logging import get_logger
+from app.rag import embedder
 from app.temporal.activities import (
     chunk_document,
     critique_draft,
+    embed_document,
     extract_facts,
     generate_draft,
     record_document_status,
@@ -28,8 +30,13 @@ logger = get_logger(__name__)
 async def run_worker() -> None:
     """Run the Temporal workers until SIGINT or SIGTERM"""
     settings = bootstrap()
+    # Before any task is taken, so a model that can't load (files missing and
+    # no network) stops the worker instead of failing documents. Nothing else
+    # runs yet, so the few seconds it blocks (minutes on the first download)
+    # hold nothing up.
+    embedder.load_model()
     # No database check: Temporal retries activities that find it down.
-    await open_pool(settings)
+    await db.open_pool(settings)
     try:
         client = await connect_temporal_client(should_connect_lazily=False)
         shutdown = asyncio.Event()
@@ -57,7 +64,11 @@ async def run_worker() -> None:
                 client,
                 task_queue=settings.temporal_document_task_queue,
                 workflows=[DocumentIngestionWorkflow],
-                activities=[record_document_status, chunk_document],
+                activities=[
+                    record_document_status,
+                    chunk_document,
+                    embed_document,
+                ],
             ),
         ):
             logger.info(
@@ -72,7 +83,7 @@ async def run_worker() -> None:
             # running is reported as failed and retried by the next worker.
         logger.info("worker_stopped")
     finally:
-        await close_pool()
+        await db.close_pool()
 
 
 if __name__ == "__main__":

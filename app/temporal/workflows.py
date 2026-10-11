@@ -41,6 +41,7 @@ with workflow.unsafe.imports_passed_through():
     from app.temporal.activities import (
         chunk_document,
         critique_draft,
+        embed_document,
         extract_facts,
         generate_draft,
         record_document_status,
@@ -53,6 +54,7 @@ GENERATE_START_TO_CLOSE_TIMEOUT = timedelta(minutes=8)
 GENERATE_SCHEDULE_TO_CLOSE_TIMEOUT = timedelta(minutes=25)
 CRITIQUE_START_TO_CLOSE_TIMEOUT = timedelta(minutes=2)
 CHUNK_START_TO_CLOSE_TIMEOUT = timedelta(minutes=5)
+EMBED_START_TO_CLOSE_TIMEOUT = timedelta(minutes=5)
 RECORD_STATUS_TIMEOUT = timedelta(seconds=10)
 RETRY_INITIAL_INTERVAL = timedelta(seconds=2)
 RETRY_BACKOFF_COEFFICIENT = 2.0
@@ -60,6 +62,7 @@ EXTRACT_MAX_ATTEMPTS = 2
 GENERATE_MAX_ATTEMPTS = 3
 CRITIQUE_MAX_ATTEMPTS = 2
 CHUNK_MAX_ATTEMPTS = 3
+EMBED_MAX_ATTEMPTS = 3
 RECORD_STATUS_MAX_ATTEMPTS = 5
 FAILED_STATUS_NOT_RECORDED = "Could not record the failed status"
 # The client already exhausted provider retries for LlmUnavailableError.
@@ -107,6 +110,9 @@ RECORD_STATUS_RETRY_POLICY = build_retry_policy(
 )
 CHUNK_RETRY_POLICY = build_retry_policy(
     CHUNK_MAX_ATTEMPTS, INGESTION_NON_RETRYABLE_ERRORS
+)
+EMBED_RETRY_POLICY = build_retry_policy(
+    EMBED_MAX_ATTEMPTS, INGESTION_NON_RETRYABLE_ERRORS
 )
 RECORD_DOCUMENT_STATUS_RETRY_POLICY = build_retry_policy(
     RECORD_STATUS_MAX_ATTEMPTS, INGESTION_NON_RETRYABLE_ERRORS
@@ -253,7 +259,7 @@ class CardGenerationWorkflow:
 
 @workflow.defn
 class DocumentIngestionWorkflow:
-    """Carries out one ingestion: chunk the document, then mark it indexed"""
+    """Carries out one ingestion: chunk, embed, then mark it indexed"""
 
     @workflow.init
     def __init__(self, document: DocumentWorkflowInput) -> None:
@@ -261,7 +267,7 @@ class DocumentIngestionWorkflow:
 
     @workflow.run
     async def run(self, document: DocumentWorkflowInput) -> DocumentStatus:
-        """Chunk the document and record where its ingestion ends"""
+        """Chunk and embed the document; record where its ingestion ends"""
         try:
             await self.record_status(DocumentStatus.PARSING)
             # A worker lost midway costs one attempt: the retry starts here,
@@ -272,9 +278,14 @@ class DocumentIngestionWorkflow:
                 start_to_close_timeout=CHUNK_START_TO_CLOSE_TIMEOUT,
                 retry_policy=CHUNK_RETRY_POLICY,
             )
-            # "Indexed" ends ingestion: the chunks are stored. The name is what
-            # the status means once 06 adds an embedding stage before it:
-            # ready for search.
+            await self.record_status(DocumentStatus.EMBEDDING)
+            await workflow.execute_activity(
+                embed_document,
+                document.document_id,
+                start_to_close_timeout=EMBED_START_TO_CLOSE_TIMEOUT,
+                retry_policy=EMBED_RETRY_POLICY,
+            )
+            # Every chunk now has a vector: the document is ready for search.
             await self.record_status(DocumentStatus.INDEXED)
         except ActivityError as error:
             await self.record_failure(error)

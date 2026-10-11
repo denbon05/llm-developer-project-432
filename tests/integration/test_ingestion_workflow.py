@@ -17,9 +17,18 @@ from app.schemas.documents import (
     DocumentStatusUpdate,
     DocumentWorkflowInput,
 )
-from app.temporal.activities import chunk_document, record_document_status
-from app.temporal.workflows import CHUNK_MAX_ATTEMPTS, DocumentIngestionWorkflow
+from app.temporal.activities import (
+    chunk_document,
+    embed_document,
+    record_document_status,
+)
+from app.temporal.workflows import (
+    CHUNK_MAX_ATTEMPTS,
+    EMBED_MAX_ATTEMPTS,
+    DocumentIngestionWorkflow,
+)
 from tests.fixtures import DOCUMENTS_DIR
+from tests.integration.seeds import read_embeddings
 
 TASK_QUEUE = "test-document-ingestion"
 STUB_CHUNK_COUNT = 5
@@ -33,9 +42,11 @@ StubActivity = Callable[..., Awaitable[Any]]
 def build_stub_activities(
     updates: list[DocumentStatusUpdate],
     chunk_errors: Sequence[Exception] = (),
+    embed_errors: Sequence[Exception] = (),
 ) -> tuple[list[StubActivity], list[UUID]]:
-    """Return activities under the real names; chunking fails as scripted"""
+    """Return activities under the real names; they fail as scripted"""
     remaining_errors = iter(chunk_errors)
+    remaining_embed_errors = iter(embed_errors)
     chunked_ids: list[UUID] = []
 
     @activity.defn(name="record_document_status")
@@ -50,7 +61,14 @@ def build_stub_activities(
             raise chunk_error
         return STUB_CHUNK_COUNT
 
-    return [record_document_status, chunk_document], chunked_ids
+    @activity.defn(name="embed_document")
+    async def embed_document(document_id: UUID) -> int:
+        embed_error = next(remaining_embed_errors, None)
+        if embed_error is not None:
+            raise embed_error
+        return STUB_CHUNK_COUNT
+
+    return [record_document_status, chunk_document, embed_document], chunked_ids
 
 
 async def run_workflow(
@@ -74,10 +92,10 @@ async def run_workflow(
         return await handle.result()
 
 
-async def test_workflow_parses_then_indexes(
+async def test_workflow_parses_embeds_then_indexes(
     temporal_env: WorkflowEnvironment,
 ) -> None:
-    """The document goes parsing, then indexed"""
+    """The document goes parsing, embedding, then indexed"""
     updates: list[DocumentStatusUpdate] = []
     activities, chunked_ids = build_stub_activities(updates)
     document_id = uuid4()
@@ -89,6 +107,9 @@ async def test_workflow_parses_then_indexes(
     assert updates == [
         DocumentStatusUpdate(
             document_id=document_id, status=DocumentStatus.PARSING
+        ),
+        DocumentStatusUpdate(
+            document_id=document_id, status=DocumentStatus.EMBEDDING
         ),
         DocumentStatusUpdate(
             document_id=document_id, status=DocumentStatus.INDEXED
@@ -130,6 +151,7 @@ async def test_workflow_retries_transient_chunk_error(
     assert len(chunked_ids) == 2
     assert [update.status for update in updates] == [
         DocumentStatus.PARSING,
+        DocumentStatus.EMBEDDING,
         DocumentStatus.INDEXED,
     ]
 
@@ -152,32 +174,55 @@ async def test_workflow_fails_after_chunk_attempts_run_out(
     assert updates[-1].error == f"{type(error).__name__}: {error}"
 
 
+async def test_workflow_fails_after_embed_attempts_run_out(
+    temporal_env: WorkflowEnvironment,
+) -> None:
+    """Embedding that keeps failing ends failed after its last attempt"""
+    updates: list[DocumentStatusUpdate] = []
+    error = RuntimeError("worker lost")
+    activities, _ = build_stub_activities(
+        updates, embed_errors=[error] * EMBED_MAX_ATTEMPTS
+    )
+
+    with pytest.raises(WorkflowFailureError):
+        await run_workflow(temporal_env, activities, uuid4())
+
+    assert [update.status for update in updates] == [
+        DocumentStatus.PARSING,
+        DocumentStatus.EMBEDDING,
+        DocumentStatus.FAILED,
+    ]
+    assert updates[-1].error == f"{type(error).__name__}: {error}"
+
+
 async def store_fixture(name: str) -> UUID:
     """Store a fixture document; return its id"""
     path = DOCUMENTS_DIR / name
-    document, _ = await documents_repository.create_document(
+    document, _ = await documents_repository.store_uploaded_document(
         name, DocumentFormat(path.suffix.removeprefix(".")), path.read_bytes()
     )
     return document.id
 
 
-@pytest.mark.usefixtures("database_pool")
+@pytest.mark.usefixtures("database_pool", "stub_embedder")
 async def test_workflow_indexes_stored_document(
     temporal_env: WorkflowEnvironment,
 ) -> None:
-    """The real activities turn a stored passport into stored chunks"""
+    """The real activities turn a stored passport into chunks with vectors"""
     document_id = await store_fixture(PASSPORT)
 
     outcome = await run_workflow(
         temporal_env,
-        [record_document_status, chunk_document],
+        [record_document_status, chunk_document, embed_document],
         document_id,
     )
 
     document = await documents_repository.get_document(document_id)
+    embeddings = await read_embeddings(document_id)
     assert outcome == DocumentStatus.INDEXED
     assert document.status == DocumentStatus.INDEXED
     assert document.chunk_count == PASSPORT_CHUNK_COUNT
+    assert all(vector is not None for vector, _, _ in embeddings)
 
 
 @pytest.mark.usefixtures("database_pool")
@@ -190,7 +235,7 @@ async def test_workflow_fails_stored_scan(
     with pytest.raises(WorkflowFailureError):
         await run_workflow(
             temporal_env,
-            [record_document_status, chunk_document],
+            [record_document_status, chunk_document, embed_document],
             document_id,
         )
 

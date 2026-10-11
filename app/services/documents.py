@@ -18,10 +18,12 @@ from app.parsers.docx import parse_docx
 from app.parsers.normalizer import normalize_blocks
 from app.parsers.pdf import parse_pdf
 from app.parsers.xlsx import parse_xlsx
+from app.rag import embedder
 from app.repositories import chunks as chunks_repository
 from app.repositories import documents as documents_repository
 from app.schemas.documents import (
     Chunk,
+    ChunkText,
     DocumentFormat,
     DocumentView,
     ParsedDocument,
@@ -107,7 +109,7 @@ async def upload_document(filename: str, content: bytes) -> DocumentView:
     """Check an uploaded file and store it, unless its bytes are stored"""
     max_size_bytes = get_settings().document_max_size_bytes
     document_format = check_upload(filename, content, max_size_bytes)
-    document, was_created = await documents_repository.create_document(
+    document, was_stored = await documents_repository.store_uploaded_document(
         filename, document_format, content
     )
     # Never the file name: supplier files hold personal data, and so may
@@ -117,7 +119,7 @@ async def upload_document(filename: str, content: bytes) -> DocumentView:
         document_id=str(document.id),
         format=document_format.value,
         size_bytes=document.size_bytes,
-        was_created=was_created,
+        was_stored=was_stored,
     )
     return document
 
@@ -194,3 +196,42 @@ async def chunk_document(document_id: UUID) -> int:
         duration_ms=round((time.perf_counter() - started) * MS_PER_S),
     )
     return len(chunks)
+
+
+async def embed_chunks(chunks: list[ChunkText]) -> None:
+    """Compute the chunks' vectors and store them"""
+    settings = get_settings()
+    # No connection is held while the model computes: the batch was read in
+    # one database operation, and the vectors are written in another.
+    vectors = await embedder.embed_chunk_texts([chunk.text for chunk in chunks])
+    await chunks_repository.write_embeddings(
+        [chunk.id for chunk in chunks],
+        vectors,
+        settings.embedding_model,
+        settings.embedding_chunk_prefix,
+    )
+
+
+async def embed_document(document_id: UUID) -> int:
+    """Compute the vectors the document's chunks lack; return how many"""
+    started = time.perf_counter()
+    settings = get_settings()
+    chunk_count = 0
+    # Each batch is stored as soon as it is computed, so a lost attempt costs
+    # at most one batch, and the retry continues where it stopped.
+    while batch := await chunks_repository.find_document_chunks_to_embed(
+        document_id,
+        settings.embedding_model,
+        settings.embedding_chunk_prefix,
+        embedder.BATCH_SIZE,
+    ):
+        await embed_chunks(batch)
+        chunk_count += len(batch)
+    logger.info(
+        "document_embedded",
+        document_id=str(document_id),
+        chunk_count=chunk_count,
+        embedding_model=settings.embedding_model,
+        duration_ms=round((time.perf_counter() - started) * MS_PER_S),
+    )
+    return chunk_count

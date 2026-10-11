@@ -5,8 +5,8 @@ from http import HTTPStatus
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
+from app.core import db
 from app.core.bootstrap import bootstrap
-from app.core.db import check_database, close_pool, open_pool
 from app.core.errors import (
     ConflictError,
     InvalidRequestError,
@@ -32,13 +32,13 @@ logger = get_logger(__name__)
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     """Set up and tear down app resources"""
     settings = bootstrap()
-    await open_pool(settings)
+    await db.open_pool(settings)
     try:
         # Fail at startup, not at the first request, when the database is down.
-        await check_database()
+        await db.check_database()
         yield
     finally:
-        await close_pool()
+        await db.close_pool()
 
 
 def respond_with(

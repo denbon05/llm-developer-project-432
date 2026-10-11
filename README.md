@@ -16,121 +16,96 @@ A Hexlet learning project: https://ru.hexlet.io/programs/llm-developer
 
 ## Stack
 
-- Python
+- Python, FastAPI, asyncpg
+- PostgreSQL with pgvector; migrations by dbmate
+- Temporal for background work
+- An OpenAI-compatible model server (LM Studio by default) and a local
+  embedding model run by fastembed
+
+Design documents: [specs](docs/specs/README.md), [decision records](docs/adr/),
+[glossary](CONTEXT.md).
 
 ## Installation
 
 Prerequisites:
 
-- [Docker](https://docs.docker.com/get-docker/) with Compose v2. It must be
-  running for `make infra` and for `make test`, which starts disposable
-  PostgreSQL containers. The first `make test` also downloads Temporal's test
-  server.
+- [Docker](https://docs.docker.com/get-docker/) with Compose v2, running:
+  `make infra` and `make test` need it.
 - [uv](https://docs.astral.sh/uv/getting-started/installation/). It installs
-  Python 3.12 from `.python-version` if you don't have it.
-- An OpenAI-compatible model server, such as [LM Studio](https://lmstudio.ai/)
-  at `http://localhost:1234/v1` with the model from `LLM_MODEL` loaded. Only
-  card generation needs it; tests never do.
+  Python 3.12 if you don't have it.
+- [LM Studio](https://lmstudio.ai/), or another OpenAI-compatible server, with
+  the model from `LLM_MODEL` loaded. Only card generation needs it.
 
 ```bash
 git clone https://github.com/denbon05/llm-developer-project-432.git
 cd llm-developer-project-432
-cp .env.example .env    # environment-specific values; defaults work locally
+cp .env.example .env    # defaults work locally
 make install
 make infra              # stays in this terminal and streams logs
+make migrate-up         # in a second terminal
 ```
 
-In a second terminal:
-
-```bash
-make migrate-up
-```
-
-Optionally, put a larger set of supplier documents (PDF, DOCX, XLSX) into
-`data/bulk/` for load runs of `make ingest`. Git ignores the directory, so the
-files stay on the local machine.
+The first `make worker` downloads the embedding model (about 1.1 GB) into
+`.cache/models/`. Tests load neither model.
 
 ## Usage
 
-The API needs the database up: it checks it at startup and exits with
-`database unavailable` if it can't connect. The worker starts without it; an
-activity that finds the database down fails, and Temporal retries it a few
-times before the job fails. The worker needs Temporal at startup. The API
-starts without Temporal; endpoints that need it answer 503 until it is up.
+### Run
 
 ```bash
-make run      # API, second terminal
-make worker   # Temporal worker, third terminal
-```
-
-```bash
-curl -s localhost:8000/health/live
-# {"status":"ok"}
+make run      # API, second terminal; API docs at http://localhost:8000/docs
+make worker   # worker, third terminal; Temporal UI at http://localhost:8233
 curl -s localhost:8000/health/ready
-# {"status":"ok","checks":{"database":"ok","vector":"0.8.6","temporal":"ok"}}
 ```
 
-Generate a card draft as a job, then approve it:
+The API needs the database at startup; the worker needs Temporal and the
+embedding model. [Spec 02](docs/specs/02-platform-foundation.md#behaviour)
+describes what happens when a dependency is down.
+
+### Card drafts
 
 ```bash
 curl -s -X POST localhost:8000/api/v1/jobs -H 'Content-Type: application/json' \
   -H 'Idempotency-Key: demo-1' \
   -d '{"supplier_text": "Immersion blender MixerPro 800. Power 800 W, 2 speeds."}'
-# {"id":"<id>","status":"pending"}
-curl -s localhost:8000/api/v1/jobs/<id>            # poll until "awaiting_approval" or "needs_review"
+curl -s localhost:8000/api/v1/jobs/<id>              # until awaiting_approval or needs_review
 curl -s -X POST localhost:8000/api/v1/jobs/<id>/approve
-# or: curl -s -X POST localhost:8000/api/v1/jobs/<id>/reject \
-#       -H 'Content-Type: application/json' -d '{"reason": "Wrong power"}'
-curl -s localhost:8000/api/v1/jobs/<id>/workflow   # Temporal's view of the job
 ```
 
-Spec 03 describes [the job API](docs/specs/03-generation-pipeline.md#http-api),
-including the `Idempotency-Key` header, and spec 04
-[which status a draft waits in](docs/specs/04-structured-output.md#routing).
-`POST /api/v1/cards` with the same body returns the draft within the request;
-with a local model it can take minutes.
+[Spec 03](docs/specs/03-generation-pipeline.md#http-api) lists every job
+endpoint, rejection included.
 
-Upload a supplier document, then poll it until ingestion ends:
+### Documents and search
 
 ```bash
 curl -s -X POST localhost:8000/api/v1/documents \
   -F 'file=@evals/datasets/fan_passport_fan_40.pdf'
-# {"id":"<id>","status":"pending"}
-curl -s localhost:8000/api/v1/documents/<id>   # poll until "indexed" or "failed"
-# {"id":"<id>","filename":"fan_passport_fan_40.pdf","format":"pdf","size_bytes":...,
-#  "status":"indexed","error":null,"chunk_count":5,"created_at":...,"updated_at":...}
+curl -s localhost:8000/api/v1/documents/<id>         # until indexed or failed
+make ingest                 # upload every document in evals/datasets/
+make search q="FAN-50"      # search the indexed documents
+make eval-search            # run the reference queries, write the report
 ```
 
-Spec 05 lists the
-[accepted files](docs/specs/05-document-ingestion.md#upload-checks) and the
-[failure reasons](docs/specs/05-document-ingestion.md#failure-reasons).
+Specs [05](docs/specs/05-document-ingestion.md) and
+[06](docs/specs/06-embeddings-and-search.md) describe ingestion, search and
+the evaluation report.
 
-To ingest a whole directory, with the API and the worker running:
-
-```bash
-make ingest                  # every PDF, DOCX and XLSX in evals/datasets/
-make ingest dir=data/bulk    # the optional local bulk set
-```
-
-Spec 05 describes
-[its report and exit code](docs/specs/05-document-ingestion.md#ingest-command).
-For an API at another address, run
-`uv run python -m evals.ingest <dir> --api-url <url>`.
-
-Interactive API docs are served at <http://localhost:8000/docs>. The Temporal
-UI is at <http://localhost:8233>.
+### Commands
 
 | Command | Does |
 |---------|------|
 | `make install` | create `.venv` and install locked dependencies |
-| `make infra` / `make down` | start PostgreSQL (pgvector) and Temporal / stop them |
+| `make infra` / `make down` | start PostgreSQL and Temporal / stop them |
+| `make migrate-up` | apply pending migrations (safe to repeat) |
 | `make run` | run the API on http://localhost:8000 with auto-reload |
-| `make worker` | run the Temporal worker that carries out jobs and document ingestion |
-| `make ingest [dir=<path>]` | upload a directory's documents and report their ingestion (default `evals/datasets`) |
-| `make migrate-up` | apply pending migrations from `db/migrations/` (safe to repeat) |
-| `make migrate-status` / `make migrate-rollback` | list applied and pending migrations / roll back the latest one |
-| `make migration name=<slug>` | create a new migration file |
-| `make lint` / `make typecheck` / `make test` | run ruff / basedpyright / pytest (needs Docker running) |
+| `make worker` | run the worker that carries out jobs and document ingestion |
+| `make ingest [dir=<path>]` | upload a directory's documents and wait for their ingestion (default `evals/datasets`; `data/bulk/` is git-ignored for a local bulk set) |
+| `make reindex` | compute the chunk vectors that are missing or from another model |
+| `make search q="<query>" [mode=vector\|keyword\|hybrid] [top_k=<n>]` | search the indexed documents and print the chunks found |
+| `make eval-search [lang=en\|ru]` | run the reference search queries and write `evals/reports/search_<lang>.md` |
+| `make migrate-status` / `make migrate-rollback` | list migrations / roll back the latest one |
+| `make migration name=<slug>` | create a migration file |
+| `make lint` / `make typecheck` / `make test` | run ruff / basedpyright / pytest |
 | `make check` | run lint, typecheck and test |
 ---
 

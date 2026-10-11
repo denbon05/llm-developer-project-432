@@ -8,9 +8,11 @@ from temporalio.contrib.pydantic import pydantic_data_converter
 from temporalio.testing import WorkflowEnvironment
 from testcontainers.community.postgres import PostgresContainer
 
+from app.core import db
 from app.core.config import get_settings
-from app.core.db import close_pool, open_pool
 from app.main import create_app, lifespan
+from app.rag import embedder
+from tests.integration.seeds import CHUNK_SIMILARITY, QUERY_VECTOR, build_vector
 
 POSTGRES_IMAGE = "pgvector/pgvector:pg16"
 MIGRATIONS_DIR = "db/migrations"
@@ -78,11 +80,11 @@ async def test_database(
 @pytest.fixture
 async def database_pool(test_database: None) -> AsyncIterator[None]:
     """Open the process pool on the session database"""
-    await open_pool(get_settings())
+    await db.open_pool(get_settings())
     try:
         yield
     finally:
-        await close_pool()
+        await db.close_pool()
 
 
 @pytest.fixture
@@ -110,3 +112,20 @@ async def temporal_env() -> AsyncIterator[WorkflowEnvironment]:
         data_converter=pydantic_data_converter
     ) as environment:
         yield environment
+
+
+@pytest.fixture
+def stub_embedder(monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
+    """Make the embedder return fixed vectors; return each batch of texts"""
+    batches: list[list[str]] = []
+
+    async def embed_chunk_texts(texts: list[str]) -> list[list[float]]:
+        batches.append(texts)
+        return [build_vector(CHUNK_SIMILARITY) for _ in texts]
+
+    async def embed_query(query: str) -> list[float]:
+        return QUERY_VECTOR
+
+    monkeypatch.setattr(embedder, "embed_chunk_texts", embed_chunk_texts)
+    monkeypatch.setattr(embedder, "embed_query", embed_query)
+    return batches

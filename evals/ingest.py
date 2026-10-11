@@ -10,23 +10,19 @@ from collections import Counter
 from pathlib import Path
 
 import httpx
+from evals.dataset_files import DATASETS_DIR, find_document_files
 
 from app.main import API_PREFIX
 from app.routers.documents import DOCUMENTS_PATH
 from app.schemas.documents import (
     TERMINAL_STATUSES,
-    DocumentFormat,
     DocumentStatus,
     DocumentStatusSummary,
     DocumentView,
 )
 
-DEFAULT_DIRECTORY = Path(__file__).resolve().parent / "datasets"
 DEFAULT_API_URL = "http://localhost:8000"
 DOCUMENTS_URL = f"{API_PREFIX}{DOCUMENTS_PATH}"
-ACCEPTED_SUFFIXES = frozenset(
-    f".{document_format.value}" for document_format in DocumentFormat
-)
 UPLOAD_FIELD = "file"
 REQUEST_TIMEOUT_S = 60.0
 WAIT_TIMEOUT_S = 10 * 60
@@ -43,8 +39,8 @@ def parse_arguments() -> argparse.Namespace:
         "directory",
         nargs="?",
         type=Path,
-        default=DEFAULT_DIRECTORY,
-        help=f"directory with the documents (default: {DEFAULT_DIRECTORY})",
+        default=DATASETS_DIR,
+        help=f"directory with the documents (default: {DATASETS_DIR})",
     )
     parser.add_argument(
         "--api-url",
@@ -52,15 +48,6 @@ def parse_arguments() -> argparse.Namespace:
         help=f"address of the running API (default: {DEFAULT_API_URL})",
     )
     return parser.parse_args()
-
-
-def find_documents(directory: Path) -> list[Path]:
-    """Return the PDF, DOCX and XLSX files directly inside the directory"""
-    return sorted(
-        path
-        for path in directory.iterdir()
-        if path.is_file() and path.suffix.lower() in ACCEPTED_SUFFIXES
-    )
 
 
 def upload_documents(
@@ -172,7 +159,7 @@ def run_ingestion() -> int:
     # The report already says how each request went.
     logging.getLogger("httpx").setLevel(logging.WARNING)
     arguments = parse_arguments()
-    paths = find_documents(arguments.directory)
+    paths = find_document_files(arguments.directory)
     with httpx.Client(
         base_url=arguments.api_url, timeout=REQUEST_TIMEOUT_S
     ) as client:

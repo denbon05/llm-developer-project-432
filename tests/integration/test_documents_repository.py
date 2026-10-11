@@ -38,9 +38,9 @@ def build_chunks(*texts: str) -> list[Chunk]:
     ]
 
 
-async def create_document() -> UUID:
+async def store_test_file() -> UUID:
     """Store the test file and return its document id"""
-    document, _ = await documents_repository.create_document(
+    document, _ = await documents_repository.store_uploaded_document(
         FILENAME, DocumentFormat.PDF, CONTENT
     )
     return document.id
@@ -58,13 +58,13 @@ async def move_document(
         )
 
 
-async def test_create_document_stores_pending_document() -> None:
+async def test_store_uploaded_document_stores_pending_document() -> None:
     """A new document is pending, and its file is kept"""
-    document, was_created = await documents_repository.create_document(
+    document, was_stored = await documents_repository.store_uploaded_document(
         FILENAME, DocumentFormat.PDF, CONTENT
     )
 
-    assert was_created
+    assert was_stored
     assert document.status == DocumentStatus.PENDING
     assert document.size_bytes == len(CONTENT)
     assert document.chunk_count == 0
@@ -75,17 +75,19 @@ async def test_create_document_stores_pending_document() -> None:
     )
 
 
-async def test_create_document_returns_first_upload_of_same_bytes() -> None:
+async def test_store_uploaded_document_returns_first_upload_of_same_bytes() -> (
+    None
+):
     """The same bytes under another name are the stored document"""
-    first, _ = await documents_repository.create_document(
+    first, _ = await documents_repository.store_uploaded_document(
         FILENAME, DocumentFormat.PDF, CONTENT
     )
 
-    again, was_created = await documents_repository.create_document(
+    again, was_stored = await documents_repository.store_uploaded_document(
         "renamed.pdf", DocumentFormat.PDF, CONTENT
     )
 
-    assert not was_created
+    assert not was_stored
     assert again == first
 
 
@@ -93,7 +95,7 @@ async def test_concurrent_creates_with_same_bytes_make_one_document() -> None:
     """Concurrent creations with the same bytes produce one document"""
     results = await asyncio.gather(
         *(
-            documents_repository.create_document(
+            documents_repository.store_uploaded_document(
                 FILENAME, DocumentFormat.PDF, CONTENT
             )
             for _ in range(CONCURRENT_CREATES)
@@ -101,13 +103,15 @@ async def test_concurrent_creates_with_same_bytes_make_one_document() -> None:
     )
 
     assert len({document.id for document, _ in results}) == 1
-    assert sum(was_created for _, was_created in results) == 1
+    assert sum(was_stored for _, was_stored in results) == 1
 
 
 async def test_update_document_status_follows_lifecycle() -> None:
-    """A document moves pending, parsing, indexed; a repeat is a no-op"""
-    document_id = await create_document()
-    await move_document(document_id, DocumentStatus.PARSING)
+    """A document moves parsing, embedding, indexed; a repeat is a no-op"""
+    document_id = await store_test_file()
+    await move_document(
+        document_id, DocumentStatus.PARSING, DocumentStatus.EMBEDDING
+    )
     indexed = DocumentStatusUpdate(
         document_id=document_id, status=DocumentStatus.INDEXED
     )
@@ -120,13 +124,19 @@ async def test_update_document_status_follows_lifecycle() -> None:
 
 
 @pytest.mark.parametrize(
-    "path", [[], [DocumentStatus.PARSING]], ids=["pending", "parsing"]
+    "path",
+    [
+        [],
+        [DocumentStatus.PARSING],
+        [DocumentStatus.PARSING, DocumentStatus.EMBEDDING],
+    ],
+    ids=["pending", "parsing", "embedding"],
 )
 async def test_update_document_status_records_failure(
     path: list[DocumentStatus],
 ) -> None:
     """Any non-terminal document can fail, and keeps the reason"""
-    document_id = await create_document()
+    document_id = await store_test_file()
     await move_document(document_id, *path)
 
     failed = await documents_repository.update_document_status(
@@ -143,20 +153,36 @@ async def test_update_document_status_records_failure(
     ("path", "target"),
     [
         ([], DocumentStatus.INDEXED),
+        ([], DocumentStatus.EMBEDDING),
+        ([DocumentStatus.PARSING], DocumentStatus.INDEXED),
         (
-            [DocumentStatus.PARSING, DocumentStatus.INDEXED],
+            [
+                DocumentStatus.PARSING,
+                DocumentStatus.EMBEDDING,
+                DocumentStatus.INDEXED,
+            ],
             DocumentStatus.FAILED,
         ),
         ([DocumentStatus.FAILED], DocumentStatus.PARSING),
-        ([DocumentStatus.PARSING], DocumentStatus.PENDING),
+        (
+            [DocumentStatus.PARSING, DocumentStatus.EMBEDDING],
+            DocumentStatus.PARSING,
+        ),
     ],
-    ids=["skip parsing", "indexed fails", "failed restarts", "backwards"],
+    ids=[
+        "skip parsing",
+        "embed unparsed",
+        "skip embedding",
+        "indexed fails",
+        "failed restarts",
+        "backwards",
+    ],
 )
 async def test_update_document_status_rejects_disallowed_transition(
     path: list[DocumentStatus], target: DocumentStatus
 ) -> None:
     """A status the document cannot move to raises"""
-    document_id = await create_document()
+    document_id = await store_test_file()
     await move_document(document_id, *path)
 
     with pytest.raises(documents_repository.InvalidDocumentTransitionError):
@@ -177,7 +203,7 @@ async def test_unknown_document_is_not_found() -> None:
 
 async def test_replacing_chunks_twice_leaves_one_set() -> None:
     """Replacing the chunks again leaves only the new set"""
-    document_id = await create_document()
+    document_id = await store_test_file()
 
     await chunks_repository.replace_chunks(
         document_id, build_chunks("Alpha", "Beta", "Gamma")

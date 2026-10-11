@@ -19,6 +19,18 @@ worker:
 ingest:
 	uv run python -m evals.ingest $(dir)
 
+# Computes the chunk vectors that are missing or from another model
+reindex:
+	uv run python -m app.rag.reindex
+
+# Needs ingested documents; mode: vector, keyword or hybrid (default)
+search:
+	uv run python -m evals.search query "$(q)" $(if $(mode),--mode $(mode)) $(if $(top_k),--top-k $(top_k))
+
+# Writes evals/reports/search_<lang>.md; lang: en (default) or ru
+eval-search:
+	uv run python -m evals.search eval $(if $(lang),--lang $(lang))
+
 migrate-up:
 	$(DBMATE) up
 

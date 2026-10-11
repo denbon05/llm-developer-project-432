@@ -1,0 +1,72 @@
+[
+  {
+    "query": "Какая мощность у блендера?",
+    "kind": "characteristic",
+    "expected": [
+      {"file": "blender_kp_ru.docx", "page": 1, "sku": "BLD-500"},
+      {"file": "blender_kp_ru.docx", "page": 1, "sku": "BLD-800"},
+      {"file": "blender_kp_ru.docx", "page": 1, "sku": "BLD-1200"}
+    ]
+  },
+  {
+    "query": "Какой объём у колбы кофеварки?",
+    "kind": "characteristic",
+    "expected": [
+      {"file": "coffee_passport_cfe_1000.pdf", "page": 1, "section": "Технические характеристики"}
+    ]
+  },
+  {
+    "query": "Сколько чашек кофе готовит кофеварка за раз?",
+    "kind": "characteristic",
+    "expected": [
+      {"file": "coffee_passport_cfe_1000.pdf", "page": 1, "section": "Кофеварка капельная «КофеАрт 1000»"}
+    ]
+  },
+  {
+    "query": "Какая минимальная партия заказа блендеров?",
+    "kind": "characteristic",
+    "expected": [
+      {"file": "blender_kp_ru.docx", "page": 1, "section": "Условия"}
+    ]
+  },
+  {
+    "query": "Как часто чистить кофеварку от накипи?",
+    "kind": "characteristic",
+    "expected": [
+      {"file": "coffee_passport_cfe_1000.pdf", "page": 2, "section": "Правила эксплуатации"}
+    ]
+  },
+  {
+    "query": "Что входит в комплект кофеварки?",
+    "kind": "characteristic",
+    "expected": [
+      {"file": "coffee_passport_cfe_1000.pdf", "page": 2, "section": "Комплект поставки"}
+    ]
+  },
+  {
+    "query": "CFE-1000",
+    "kind": "sku",
+    "expected": [
+      {"file": "coffee_passport_cfe_1000.pdf", "page": 1, "section": "Технические характеристики"}
+    ]
+  },
+  {
+    "query": "BLD-800",
+    "kind": "sku",
+    "expected": [
+      {"file": "blender_kp_ru.docx", "page": 1, "sku": "BLD-800"}
+    ]
+  },
+  {
+    "query": "рецепт борща",
+    "kind": "noise"
+  },
+  {
+    "query": "прогноз погоды в Париже на завтра",
+    "kind": "noise"
+  },
+  {
+    "query": "разрешение экрана смартфона",
+    "kind": "noise"
+  }
+]

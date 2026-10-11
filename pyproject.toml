@@ -18,6 +18,8 @@ dependencies = [
     "python-docx",
     "openpyxl",
     "python-multipart",
+    "fastembed",
+    "pgvector",
 ]
 
 [dependency-groups]

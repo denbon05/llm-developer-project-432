@@ -1,10 +1,12 @@
 from collections.abc import Callable
+from types import ModuleType
 from unittest.mock import AsyncMock
 
 import httpx
 import pytest
 from fastapi import status
 
+from app.core import db
 from app.core.db import DatabaseUnavailableError
 from app.main import create_app, lifespan
 from app.routers import health as health_router
@@ -24,20 +26,21 @@ async def test_startup_fails_without_database(
 
 
 @pytest.mark.parametrize(
-    ("dependency", "error"),
+    ("module", "dependency", "error"),
     [
-        ("fetch_vector_version", DatabaseUnavailableError()),
-        ("ensure_temporal_serving", TemporalUnavailableError()),
+        (db, "fetch_vector_version", DatabaseUnavailableError()),
+        (health_router, "ensure_temporal_serving", TemporalUnavailableError()),
     ],
 )
 async def test_ready_503_when_dependency_is_unavailable(
     api_client: httpx.AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
+    module: ModuleType,
     dependency: str,
     error: Exception,
 ) -> None:
     """The API stays alive but is not ready when a dependency is down"""
-    monkeypatch.setattr(health_router, dependency, AsyncMock(side_effect=error))
+    monkeypatch.setattr(module, dependency, AsyncMock(side_effect=error))
 
     live = await api_client.get(health_router.LIVENESS_PATH)
     ready = await api_client.get(health_router.READINESS_PATH)

@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.core.db import fetch_vector_version
+from app.core import db
 from app.temporal.client import ensure_temporal_serving
 
 LIVENESS_PATH = "/health/live"
@@ -22,7 +22,7 @@ async def check_readiness() -> dict[str, str | dict[str, str]]:
     """Return readiness of the database, the vector extension and Temporal"""
     # Each check raises on failure, which answers 503, so reaching the return
     # means every check passed.
-    vector_version = await fetch_vector_version()
+    vector_version = await db.fetch_vector_version()
     await ensure_temporal_serving()
     return {
         STATUS_FIELD: STATUS_OK,

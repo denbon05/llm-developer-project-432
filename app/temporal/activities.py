@@ -53,3 +53,9 @@ async def record_document_status(update: DocumentStatusUpdate) -> None:
 async def chunk_document(document_id: UUID) -> int:
     """Turn the stored document into chunks; return how many"""
     return await documents_service.chunk_document(document_id)
+
+
+@activity.defn
+async def embed_document(document_id: UUID) -> int:
+    """Compute the vectors the document's chunks lack; return how many"""
+    return await documents_service.embed_document(document_id)

@@ -1,9 +1,14 @@
 from datetime import datetime
 from enum import StrEnum
-from typing import Literal, NamedTuple, NotRequired, TypedDict
+from typing import Any, Literal, NamedTuple, NotRequired, TypedDict
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+from app.schemas.cards import NonBlankText
+
+SEARCH_DEFAULT_TOP_K = 5
+SEARCH_MAX_TOP_K = 50
 
 
 class DocumentFormat(StrEnum):
@@ -19,6 +24,7 @@ class DocumentStatus(StrEnum):
 
     PENDING = "pending"
     PARSING = "parsing"
+    EMBEDDING = "embedding"
     INDEXED = "indexed"
     FAILED = "failed"
 
@@ -27,7 +33,10 @@ TERMINAL_STATUSES = frozenset({DocumentStatus.INDEXED, DocumentStatus.FAILED})
 # For each status a document can move to, the statuses it may move from
 ALLOWED_TRANSITIONS: dict[DocumentStatus, frozenset[DocumentStatus]] = {
     DocumentStatus.PARSING: frozenset({DocumentStatus.PENDING}),
-    DocumentStatus.INDEXED: frozenset({DocumentStatus.PARSING}),
+    DocumentStatus.EMBEDDING: frozenset({DocumentStatus.PARSING}),
+    # Only from embedding: an indexed document is searchable, so every chunk
+    # has a vector.
+    DocumentStatus.INDEXED: frozenset({DocumentStatus.EMBEDDING}),
     DocumentStatus.FAILED: frozenset(DocumentStatus) - TERMINAL_STATUSES,
 }
 
@@ -134,3 +143,49 @@ class Chunk(BaseModel):
 
     text: str
     metadata: ChunkMetadata
+
+
+class ChunkText(NamedTuple):
+    """A stored chunk's id and text"""
+
+    id: UUID
+    text: str
+
+
+class SearchMode(StrEnum):
+    """How search ranks chunks"""
+
+    VECTOR = "vector"
+    KEYWORD = "keyword"
+    HYBRID = "hybrid"
+
+
+SEARCH_DEFAULT_MODE = SearchMode.HYBRID
+
+
+class SearchRequest(BaseModel):
+    """A query and the scope to search it in"""
+
+    query: NonBlankText
+    mode: SearchMode = SEARCH_DEFAULT_MODE
+    top_k: int = Field(default=SEARCH_DEFAULT_TOP_K, ge=1, le=SEARCH_MAX_TOP_K)
+    # Only chunks of these documents
+    document_ids: list[UUID] | None = None
+    # Only chunks whose metadata contains these key-value pairs
+    metadata: dict[str, Any] | None = None
+    # None means SEARCH_MIN_SIMILARITY; evaluation overrides it. Cosine
+    # similarity lies between -1 and 1.
+    min_similarity: float | None = Field(default=None, ge=-1, le=1)
+
+
+class SearchResult(BaseModel):
+    """A chunk search found, with its score and rank in each branch"""
+
+    chunk_id: UUID
+    document_id: UUID
+    text: str
+    score: float
+    metadata: ChunkMetadata
+    # Positions from 1 in each branch's list; None when it didn't find it
+    vector_rank: int | None
+    keyword_rank: int | None

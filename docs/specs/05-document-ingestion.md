@@ -472,7 +472,7 @@ The command serves two runs:
 ### Logs
 
 - `document_uploaded` (info): `document_id`, `format`, `size_bytes`,
-  `was_created`.
+  `was_stored`.
 - `document_parsed` (info): `document_id`, `pages` (sheets for XLSX),
   `pages_without_text`, `chunk_count`, `duration_ms`.
 - `document_unreadable` (warning): `document_id`, `reason`.

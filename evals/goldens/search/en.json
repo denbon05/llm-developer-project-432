@@ -1,0 +1,107 @@
+[
+  {
+    "query": "What is the blender's power?",
+    "kind": "characteristic",
+    "expected": [
+      {"file": "blender_kp.docx", "page": 1, "sku": "BLD-500"},
+      {"file": "blender_kp.docx", "page": 1, "sku": "BLD-800"},
+      {"file": "blender_kp.docx", "page": 1, "sku": "BLD-1200"}
+    ]
+  },
+  {
+    "query": "How long does the vacuum cleaner battery last?",
+    "kind": "characteristic",
+    "expected": [
+      {"file": "vacuum_passport_vcs_180.pdf", "page": 1, "section": "Pylesos 180 Upright Vacuum Cleaner"},
+      {"file": "vacuum_passport_vcs_180.pdf", "page": 1, "section": "Technical specifications"}
+    ]
+  },
+  {
+    "query": "How many speeds does the VentBriz 45 fan have?",
+    "kind": "characteristic",
+    "expected": [
+      {"file": "fan_passport_fan_45.pdf", "page": 1, "section": "VentBriz 45 Fan"},
+      {"file": "fan_passport_fan_45.pdf", "page": 1, "section": "Technical specifications"}
+    ]
+  },
+  {
+    "query": "minimum order quantity for blenders",
+    "kind": "characteristic",
+    "expected": [
+      {"file": "blender_kp.docx", "page": 1, "section": "Terms"}
+    ]
+  },
+  {
+    "query": "What comes in the box with the vacuum cleaner?",
+    "kind": "characteristic",
+    "expected": [
+      {"file": "vacuum_passport_vcs_180.pdf", "page": 2, "section": "Package contents"}
+    ]
+  },
+  {
+    "query": "How heavy is the VentBriz 40 fan?",
+    "kind": "characteristic",
+    "expected": [
+      {"file": "fan_passport_fan_40.pdf", "page": 1, "section": "Technical specifications"},
+      {"file": "fan_spec_1.xlsx", "page": 1, "sku": "FAN-40"}
+    ]
+  },
+  {
+    "query": "What is not covered by the vacuum cleaner warranty?",
+    "kind": "characteristic",
+    "expected": [
+      {"file": "vacuum_passport_vcs_180.pdf", "page": 2, "section": "Warranty obligations"}
+    ]
+  },
+  {
+    "query": "FAN-50",
+    "kind": "sku",
+    "expected": [
+      {"file": "fan_kp_2.pdf", "page": 1, "section": "Price list (wholesale)"}
+    ]
+  },
+  {
+    "query": "FAN-35",
+    "kind": "sku",
+    "expected": [
+      {"file": "fan_spec_1.xlsx", "page": 1, "sku": "FAN-35"}
+    ]
+  },
+  {
+    "query": "VCS-210",
+    "kind": "sku",
+    "expected": [
+      {"file": "vacuum_spec_1.xlsx", "page": 1, "sku": "VCS-210"}
+    ]
+  },
+  {
+    "query": "BLD-1200",
+    "kind": "sku",
+    "expected": [
+      {"file": "blender_kp.docx", "page": 1, "sku": "BLD-1200"}
+    ]
+  },
+  {
+    "query": "FAN-70",
+    "kind": "sku",
+    "expected": [
+      {"file": "fan_kp_2.pdf", "page": 1, "section": "Price list (wholesale)"}
+    ]
+  },
+  {
+    "query": "smartphone screen resolution",
+    "kind": "noise"
+  },
+  {
+    "query": "weather in Paris tomorrow",
+    "kind": "noise"
+  },
+  {
+    "query": "chocolate cake recipe",
+    "kind": "noise"
+  },
+  {
+    "query": "How do I renew my car insurance?",
+    "kind": "noise"
+  }
+]

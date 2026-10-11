@@ -28,6 +28,21 @@ verify in a minute instead of writing in an hour.
 - **Brand**: the trade name a product is sold under, not the supplier
   company. _Avoid_: manufacturer, vendor.
 
+### Search
+
+- **Embedding**: a vector that stands for the meaning of a chunk or a query.
+  _Avoid_: encoding, vector (for the concept).
+- **Vector search**: finding chunks whose embeddings lie closest to the
+  query's. _Avoid_: semantic search, dense search.
+- **Keyword search**: finding chunks that contain every word of the query.
+  _Avoid_: full-text search, lexical search, FTS.
+- **Hybrid search**: vector and keyword search merged by rank, so a chunk both
+  find ranks higher. _Avoid_: combined search.
+- **Similarity threshold**: the lowest similarity at which vector search
+  accepts a chunk. _Avoid_: cutoff, relevance score.
+- **Reindex**: computing the embeddings that are missing or were made by
+  another model. _Avoid_: backfill, re-embedding.
+
 ### Output
 
 - **Card draft**: a generated product card; a draft until a human approves

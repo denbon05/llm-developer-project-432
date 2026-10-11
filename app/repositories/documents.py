@@ -3,11 +3,12 @@ from uuid import UUID
 
 import asyncpg
 
-from app.core.db import connection
+from app.core import db
 from app.core.errors import ConflictError, NotFoundError
 from app.schemas.documents import (
     ALLOWED_TRANSITIONS,
     DocumentFormat,
+    DocumentStatus,
     DocumentStatusUpdate,
     DocumentView,
 )
@@ -34,6 +35,11 @@ class InvalidDocumentTransitionError(ConflictError):
         super().__init__(f"document cannot move from {current} to {target}")
 
 
+def hash_content(content: bytes) -> str:
+    """Return the SHA-256 of a file's bytes, the document's identity"""
+    return hashlib.sha256(content).hexdigest()
+
+
 def to_document(row: asyncpg.Record) -> DocumentView:
     """Return the document stored in the row"""
     return DocumentView(
@@ -49,14 +55,15 @@ def to_document(row: asyncpg.Record) -> DocumentView:
     )
 
 
-async def create_document(
+async def store_uploaded_document(
     filename: str, document_format: DocumentFormat, content: bytes
 ) -> tuple[DocumentView, bool]:
-    """Store a pending document; return it and whether it was newly created"""
-    # The content hash is the document's identity: the same bytes uploaded
-    # again are the same document, whatever the file name.
-    content_sha256 = hashlib.sha256(content).hexdigest()
-    async with connection() as conn:
+    """Store the upload as a pending document, unless its bytes are stored"""
+    # Returns the document and was_stored. The content hash is the document's
+    # identity, so the same bytes uploaded again, under any file name, return
+    # the stored document with was_stored False.
+    content_sha256 = hash_content(content)
+    async with db.connection() as conn:
         # ON CONFLICT leaves no race window between a check and the insert,
         # so concurrent uploads of one file create one document.
         row = await conn.fetchrow(
@@ -89,7 +96,7 @@ async def create_document(
 
 async def get_document(document_id: UUID) -> DocumentView:
     """Return the document with this id"""
-    async with connection() as conn:
+    async with db.connection() as conn:
         row = await conn.fetchrow(
             f"SELECT {DOCUMENT_VIEW_COLUMNS} FROM documents WHERE id = $1",
             document_id,
@@ -99,11 +106,41 @@ async def get_document(document_id: UUID) -> DocumentView:
     return to_document(row)
 
 
+async def find_documents(status: DocumentStatus) -> list[DocumentView]:
+    """Return the documents in this status, oldest first"""
+    async with db.connection() as conn:
+        rows = await conn.fetch(
+            f"""
+            SELECT {DOCUMENT_VIEW_COLUMNS} FROM documents
+            WHERE status = $1
+            ORDER BY created_at, id
+            """,
+            status,
+        )
+    return [to_document(row) for row in rows]
+
+
+async def find_documents_by_content(
+    content_sha256s: list[str], status: DocumentStatus
+) -> dict[str, DocumentView]:
+    """Return the documents in this status with these contents, by hash"""
+    async with db.connection() as conn:
+        rows = await conn.fetch(
+            f"""
+            SELECT content_sha256, {DOCUMENT_VIEW_COLUMNS} FROM documents
+            WHERE content_sha256 = ANY($1::text[]) AND status = $2
+            """,
+            content_sha256s,
+            status,
+        )
+    return {row["content_sha256"]: to_document(row) for row in rows}
+
+
 async def get_document_content(
     document_id: UUID,
 ) -> tuple[DocumentFormat, bytes]:
     """Return the document's format and file"""
-    async with connection() as conn:
+    async with db.connection() as conn:
         row = await conn.fetchrow(
             "SELECT format, content FROM documents WHERE id = $1", document_id
         )
@@ -115,7 +152,7 @@ async def get_document_content(
 async def update_document_status(update: DocumentStatusUpdate) -> DocumentView:
     """Move the document to the new status and return it"""
     allowed_from = ALLOWED_TRANSITIONS.get(update.status, frozenset())
-    async with connection() as conn:
+    async with db.connection() as conn:
         # The status guard stops a late retry from moving a document
         # backwards.
         row = await conn.fetchrow(

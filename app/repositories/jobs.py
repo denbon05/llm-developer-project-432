@@ -5,7 +5,7 @@ from uuid import UUID
 
 import asyncpg
 
-from app.core.db import connection
+from app.core import db
 from app.core.errors import ConflictError, InvalidRequestError, NotFoundError
 from app.schemas.jobs import (
     ALLOWED_TRANSITIONS,
@@ -70,7 +70,7 @@ async def create_job(
     """Store a pending job; return it and whether it was newly created"""
     payload = job_request.model_dump()
     request_hash = hash_request(payload)
-    async with connection() as conn:
+    async with db.connection() as conn:
         # ON CONFLICT leaves no race window between a check and the insert.
         row = await conn.fetchrow(
             """
@@ -95,7 +95,7 @@ async def create_job(
 
 async def get_job(job_id: UUID) -> JobView:
     """Return the job with this id"""
-    async with connection() as conn:
+    async with db.connection() as conn:
         row = await conn.fetchrow("SELECT * FROM jobs WHERE id = $1", job_id)
     if row is None:
         raise JobNotFoundError()
@@ -113,7 +113,7 @@ async def get_job_awaiting_decision(job_id: UUID) -> JobView:
 async def update_job_status(update: JobStatusUpdate) -> JobView:
     """Move the job to the new status and return it"""
     allowed_from = ALLOWED_TRANSITIONS.get(update.status, frozenset())
-    async with connection() as conn:
+    async with db.connection() as conn:
         # Counting and timestamps happen in the database, and the status
         # guard stops a late retry from moving a job backwards.
         row = await conn.fetchrow(

@@ -5,9 +5,11 @@ from contextlib import asynccontextmanager
 
 import asyncpg
 from asyncpg.pool import PoolConnectionProxy
+from pgvector.asyncpg import register_vector
 
 from app.core.config import Settings
 from app.core.errors import UnavailableError
+from app.core.logging import get_logger
 
 HEALTH_CHECK_TIMEOUT_S = 2.0
 # Refused sockets, a server that is still starting up, and a pooled
@@ -18,6 +20,8 @@ CONNECTION_ERRORS = (
     asyncpg.CannotConnectNowError,
     asyncpg.PostgresConnectionError,
 )
+
+logger = get_logger(__name__)
 
 _pool: asyncpg.Pool | None = None
 
@@ -46,6 +50,17 @@ async def register_codecs(conn: asyncpg.Connection) -> None:
         decoder=json.loads,
         schema="pg_catalog",
     )
+    # Lets queries pass a list[float] where SQL expects a vector, and back.
+    try:
+        await register_vector(conn)
+    except ValueError:
+        # Raised when the database has no vector type, because the extension
+        # isn't installed (migrations not applied yet). Nothing to register
+        # then: skipping keeps the API starting, and readiness reports the
+        # missing extension. Vector queries on this connection would fail.
+        logger.warning(
+            "vector_codec_skipped", reason="vector extension missing"
+        )
 
 
 async def open_pool(settings: Settings) -> asyncpg.Pool:
