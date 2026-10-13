@@ -112,7 +112,12 @@ async def ensure_temporal_serving() -> None:
 
 
 @translate_temporal_errors
-async def start_card_workflow(job_id: UUID, supplier_text: str) -> None:
+async def start_card_workflow(
+    job_id: UUID,
+    supplier_text: str | None = None,
+    document_ids: list[UUID] | None = None,
+    hint: str | None = None,
+) -> None:
     """Start the job's workflow unless it already exists"""
     settings = get_settings()
     client = await get_temporal_client()
@@ -122,6 +127,8 @@ async def start_card_workflow(job_id: UUID, supplier_text: str) -> None:
             CardWorkflowInput(
                 job_id=job_id,
                 supplier_text=supplier_text,
+                document_ids=document_ids,
+                hint=hint,
                 confidence_threshold=settings.card_confidence_threshold,
             ),
             id=build_workflow_id(job_id),

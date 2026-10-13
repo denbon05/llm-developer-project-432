@@ -16,6 +16,10 @@ META_DESCRIPTION_MAX_LENGTH = 160
 SUPPLIER_TEXT_MAX_LENGTH = 20_000
 CONFIDENCE_DECIMALS = 2
 PUNCTUATION_CATEGORY_PREFIX = "P"
+# Labels (S1, S2, …), not chunk ids: a model copies a short label without
+# mistakes, but can garble a 36-character id.
+SOURCE_LABEL_PREFIX = "S"
+SOURCE_LABEL_PATTERN = rf"^{SOURCE_LABEL_PREFIX}\d+$"
 
 
 def is_blank(text: str) -> bool:
@@ -44,7 +48,9 @@ def check_not_blank(text: str) -> str:
     return text
 
 
-def check_names_not_blank(characteristics: dict[str, str]) -> dict[str, str]:
+def check_names_not_blank[ValueT](
+    characteristics: dict[str, ValueT],
+) -> dict[str, ValueT]:
     """Return the characteristics, or raise if a name is blank"""
     if any(is_blank(name) for name in characteristics):
         raise PydanticCustomError(
@@ -95,11 +101,34 @@ def separate_missing_fields(
     return kept, missing
 
 
+def compute_confidence(found: int, missing: int) -> float:
+    """Return the share of needed characteristics that were found"""
+    needed = found + missing
+    if not needed:
+        return 0.0
+    return round(found / needed, CONFIDENCE_DECIMALS)
+
+
 NonBlankText = Annotated[str, AfterValidator(check_not_blank)]
 TextList = Annotated[list[str], AfterValidator(drop_blank_items)]
 Characteristics = Annotated[
     dict[str, str], AfterValidator(check_names_not_blank)
 ]
+# Shared by both kinds of card draft. Field must precede AfterValidator, or
+# the length limit would reach the schema sent to the model.
+CardTitle = Annotated[
+    str,
+    Field(
+        max_length=CARD_TITLE_MAX_LENGTH,
+        description=f"Card title, at most {CARD_TITLE_MAX_LENGTH} characters",
+    ),
+    AfterValidator(check_not_blank),
+]
+CardDescription = Annotated[
+    NonBlankText, Field(description="Description in 3-4 sentences")
+]
+Benefits = Annotated[TextList, Field(description="3-5 benefits for the buyer")]
+SourceLabel = Annotated[str, Field(pattern=SOURCE_LABEL_PATTERN)]
 SupplierText = Annotated[
     str,
     Field(
@@ -161,17 +190,12 @@ class SeoBlock(BaseModel):
 class CardDraft(BaseModel):
     """A generated product card draft"""
 
-    title: NonBlankText = Field(
-        max_length=CARD_TITLE_MAX_LENGTH,
-        description=f"Card title, at most {CARD_TITLE_MAX_LENGTH} characters",
-    )
-    description: NonBlankText = Field(
-        description="Description in 3-4 sentences"
-    )
+    title: CardTitle
+    description: CardDescription
     characteristics: Characteristics = Field(
         description="Characteristics as name-value pairs, only from the facts"
     )
-    benefits: TextList = Field(description="3-5 benefits for the buyer")
+    benefits: Benefits
     seo: SeoBlock
     missing_fields: list[str] = Field(
         description="Every missing field from the facts, none given a value"
@@ -191,11 +215,66 @@ class CardDraft(BaseModel):
     @property
     def confidence(self) -> float:
         """Return the share of needed characteristics the draft provides"""
-        found = len(self.characteristics)
-        needed = found + len(self.missing_fields)
-        if not needed:
-            return 0.0
-        return round(found / needed, CONFIDENCE_DECIMALS)
+        return compute_confidence(
+            len(self.characteristics), len(self.missing_fields)
+        )
+
+
+class CitedValue(BaseModel):
+    """A characteristic's value and the labels of the sources that state it"""
+
+    value: str = Field(description="The value as the sources state it")
+    # At least one label: a value no source states is a missing field.
+    sources: list[SourceLabel] = Field(
+        min_length=1,
+        description="Ids of the sources that state the value, such as S1",
+    )
+
+
+GroundedCharacteristics = Annotated[
+    dict[str, CitedValue], AfterValidator(check_names_not_blank)
+]
+
+
+class GroundedCardDraft(BaseModel):
+    """A card draft written from sources, its characteristics citing them"""
+
+    title: CardTitle
+    description: CardDescription
+    characteristics: GroundedCharacteristics = Field(
+        description="Characteristics by name, each with its value and sources"
+    )
+    benefits: Benefits
+    seo: SeoBlock
+    missing_fields: list[str] = Field(
+        description=(
+            "Characteristics a buyer of this product type expects on its card "
+            "that no source states"
+        )
+    )
+
+    @model_validator(mode="after")
+    def keep_names_in_one_list(self) -> Self:
+        """Move empty values to missing fields and reject names in both"""
+        values = {
+            name: cited.value for name, cited in self.characteristics.items()
+        }
+        kept, self.missing_fields = separate_missing_fields(
+            values, self.missing_fields
+        )
+        self.characteristics = {
+            name: self.characteristics[name] for name in kept
+        }
+        return self
+
+    # Computed for the same reasons as CardDraft's.
+    @computed_field
+    @property
+    def confidence(self) -> float:
+        """Return the share of needed characteristics the draft provides"""
+        return compute_confidence(
+            len(self.characteristics), len(self.missing_fields)
+        )
 
 
 class Critique(BaseModel):
@@ -207,8 +286,9 @@ class Critique(BaseModel):
     issues: list[str] = Field(
         default_factory=list,
         description=(
-            "Issues found, each citing the rule it breaks "
-            "(for example: R2: warranty is missing from missing_fields)"
+            "Issues found, each starting with the source id or the draft "
+            "field it concerns (for example: missing_fields: warranty is "
+            "missing)"
         ),
     )
 

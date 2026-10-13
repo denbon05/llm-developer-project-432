@@ -1,0 +1,221 @@
+from uuid import UUID
+
+from app.agents.prompts import (
+    CITATION_CHUNK_MISSING_ISSUE,
+    CITATION_NOT_IN_CONTEXT_ISSUE,
+    CRITIC_MAX_TOKENS,
+    CRITIC_TEMPERATURE,
+    GENERATOR_MAX_TOKENS,
+    GENERATOR_TEMPERATURE,
+    build_grounded_critic_messages,
+    build_grounded_generator_messages,
+)
+from app.core.config import get_settings
+from app.core.errors import ConflictError, NotFoundError, ServiceError
+from app.core.logging import get_logger
+from app.rag import retrieval
+from app.rag.context import (
+    assemble_context,
+    choose_title,
+    find_naming_documents,
+)
+from app.repositories import chunks as chunks_repository
+from app.repositories import documents as documents_repository
+from app.repositories import jobs as jobs_repository
+from app.schemas.cards import SOURCE_LABEL_PREFIX, Critique, GroundedCardDraft
+from app.schemas.documents import (
+    DocumentStatus,
+    DocumentView,
+    SearchMode,
+    SearchRequest,
+)
+from app.schemas.jobs import Source
+from app.services.structured import complete_structured
+
+# Hybrid search candidates the context is assembled from
+CANDIDATE_COUNT = 20
+# -1 turns the similarity threshold off: the user chose the documents, and a
+# section like "Package contents" looks nothing like the hint.
+NO_SIMILARITY_THRESHOLD = -1.0
+LIST_SEPARATOR = ", "
+NOT_IN_CONTEXT = "not_in_context"
+CHUNK_MISSING = "chunk_missing"
+
+logger = get_logger(__name__)
+
+
+class DocumentsNotFoundError(NotFoundError):
+    """Raised when some of the requested documents don't exist"""
+
+    def __init__(self, document_ids: list[UUID]) -> None:
+        listed = LIST_SEPARATOR.join(
+            str(document_id) for document_id in document_ids
+        )
+        super().__init__(f"documents not found: {listed}")
+
+
+class DocumentsNotIndexedError(ConflictError):
+    """Raised when some of the requested documents aren't indexed"""
+
+    def __init__(self, documents: list[DocumentView]) -> None:
+        listed = LIST_SEPARATOR.join(
+            f"{document.id} ({document.status})" for document in documents
+        )
+        super().__init__(f"documents not indexed: {listed}")
+
+
+# Maps to no HTTP status: it fails a job, never a request.
+class EmptyContextError(ServiceError):
+    """Raised when no chunk of the job's documents can enter its context"""
+
+    message = (
+        "no chunks to build the context from; "
+        "run make reindex if the embedding model changed"
+    )
+
+
+async def check_documents(document_ids: list[UUID]) -> None:
+    """Raise unless every document exists and is indexed"""
+    documents = await documents_repository.find_documents_by_id(document_ids)
+    missing_ids = [
+        document_id
+        for document_id in document_ids
+        if document_id not in documents
+    ]
+    if missing_ids:
+        raise DocumentsNotFoundError(missing_ids)
+    not_indexed = [
+        documents[document_id]
+        for document_id in document_ids
+        if documents[document_id].status != DocumentStatus.INDEXED
+    ]
+    if not_indexed:
+        raise DocumentsNotIndexedError(not_indexed)
+
+
+async def read_title(document_id: UUID) -> str:
+    """Return the document's title"""
+    document = await documents_repository.get_document(document_id)
+    # An indexed document always has a chunk.
+    chunks = await chunks_repository.find_document_chunks([document_id])
+    return choose_title(chunks[0].metadata["section"], document.filename)
+
+
+async def retrieve_context(
+    job_id: UUID, document_ids: list[UUID], hint: str | None
+) -> tuple[str, list[UUID]]:
+    """Return the product line and the chunk ids of the job's sources"""
+    # Names the product for the generator and the critic; also the query.
+    product_line = hint or await read_title(document_ids[0])
+    candidates = await retrieval.search(
+        SearchRequest(
+            query=product_line,
+            mode=SearchMode.HYBRID,
+            top_k=CANDIDATE_COUNT,
+            document_ids=document_ids,
+            min_similarity=NO_SIMILARITY_THRESHOLD,
+        )
+    )
+    document_chunks = await chunks_repository.find_document_chunks(
+        find_naming_documents(candidates)
+    )
+    context = assemble_context(candidates, document_chunks, hint)
+    # Possible only when no chunk has a current vector and keyword search
+    # finds nothing.
+    if not context.chunk_ids:
+        raise EmptyContextError()
+    # Ids and counts only: neither chunk text nor the query reaches the logs.
+    logger.info(
+        "context_assembled",
+        job_id=str(job_id),
+        documents=len(document_ids),
+        candidates=len(candidates),
+        sources=len(context.chunk_ids),
+        tokens=context.tokens,
+        duplicates_dropped=context.duplicates_dropped,
+        other_sku_rows_dropped=context.other_sku_rows_dropped,
+        cut_by_limit=context.cut_by_limit,
+        chunk_ids=[str(chunk_id) for chunk_id in context.chunk_ids],
+    )
+    return product_line, context.chunk_ids
+
+
+async def read_sources(job_id: UUID) -> list[Source]:
+    """Return the job's sources in label order"""
+    # Read in a database operation of its own, so no connection is held
+    # during the model call.
+    # TODO: mask before any prompt.
+    job = await jobs_repository.get_job(job_id)
+    return job.sources
+
+
+async def generate(
+    job_id: UUID,
+    product_line: str,
+    feedback: list[str] | None = None,
+    previous_draft: GroundedCardDraft | None = None,
+) -> GroundedCardDraft:
+    """Return a card draft written from the job's sources and any issues"""
+    settings = get_settings()
+    sources = await read_sources(job_id)
+    return await complete_structured(
+        build_grounded_generator_messages(
+            product_line, sources, feedback, previous_draft
+        ),
+        response_schema=GroundedCardDraft,
+        temperature=GENERATOR_TEMPERATURE,
+        max_tokens=GENERATOR_MAX_TOKENS,
+        timeout_s=settings.llm_generate_timeout_s,
+        max_retries=settings.llm_generate_max_retries,
+    )
+
+
+async def verify_citations(job_id: UUID, draft: GroundedCardDraft) -> list[str]:
+    """Return an issue for each citation of a source the job doesn't have"""
+    # Citing a chunk the model never saw is invention. Whether a real source
+    # supports the value is for the critic.
+    context_chunk_ids = await jobs_repository.get_context_chunk_ids(job_id)
+    existing_ids = await chunks_repository.find_existing_chunk_ids(
+        context_chunk_ids
+    )
+    chunk_ids_by_label = {
+        f"{SOURCE_LABEL_PREFIX}{position}": chunk_id
+        for position, chunk_id in enumerate(context_chunk_ids, start=1)
+    }
+    issues: list[str] = []
+    invalid_citations: list[dict[str, str]] = []
+    for name, cited in draft.characteristics.items():
+        for label in cited.sources:
+            if label not in chunk_ids_by_label:
+                reason, issue = NOT_IN_CONTEXT, CITATION_NOT_IN_CONTEXT_ISSUE
+            # Only if a document is re-chunked after retrieval: nothing does
+            # that today, but the check is cheap.
+            elif chunk_ids_by_label[label] not in existing_ids:
+                reason, issue = CHUNK_MISSING, CITATION_CHUNK_MISSING_ISSUE
+            else:
+                continue
+            issues.append(issue.format(name=name, label=label))
+            invalid_citations.append(
+                {"characteristic": name, "label": label, "reason": reason}
+            )
+    if invalid_citations:
+        logger.warning(
+            "citations_invalid", job_id=str(job_id), citations=invalid_citations
+        )
+    return issues
+
+
+async def critique(
+    job_id: UUID, product_line: str, draft: GroundedCardDraft
+) -> Critique:
+    """Return the critic's verdict on the draft against the job's sources"""
+    settings = get_settings()
+    sources = await read_sources(job_id)
+    return await complete_structured(
+        build_grounded_critic_messages(product_line, sources, draft),
+        response_schema=Critique,
+        temperature=CRITIC_TEMPERATURE,
+        max_tokens=CRITIC_MAX_TOKENS,
+        timeout_s=settings.llm_critique_timeout_s,
+        max_retries=settings.llm_critique_max_retries,
+    )

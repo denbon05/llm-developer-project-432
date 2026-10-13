@@ -152,6 +152,15 @@ class ChunkText(NamedTuple):
     text: str
 
 
+class StoredChunk(BaseModel):
+    """A stored chunk with its id and document"""
+
+    chunk_id: UUID
+    document_id: UUID
+    text: str
+    metadata: ChunkMetadata
+
+
 class SearchMode(StrEnum):
     """How search ranks chunks"""
 

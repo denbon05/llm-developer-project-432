@@ -12,6 +12,7 @@ from app.schemas.cards import (
     META_TITLE_MAX_LENGTH,
     CardDraft,
     Critique,
+    GroundedCardDraft,
     SeoBlock,
     SupplierFacts,
 )
@@ -34,11 +35,19 @@ DRAFT: dict[str, Any] = {
     "seo": SEO,
     "missing_fields": ["Warranty"],
 }
+GROUNDED_DRAFT: dict[str, Any] = {
+    **DRAFT,
+    "characteristics": {"Power": {"value": "800 W", "sources": ["S1"]}},
+}
 SCHEMAS_WITH_MISSING_FIELDS = [(SupplierFacts, FACTS), (CardDraft, DRAFT)]
 SCHEMAS_WITH_MISSING_FIELDS_IDS = ["facts", "draft"]
 WRITTEN_FIELDS = [
     (schema, data, field)
-    for schema, data in [*SCHEMAS_WITH_MISSING_FIELDS, (SeoBlock, SEO)]
+    for schema, data in [
+        *SCHEMAS_WITH_MISSING_FIELDS,
+        (GroundedCardDraft, GROUNDED_DRAFT),
+        (SeoBlock, SEO),
+    ]
     for field in schema.model_fields
 ]
 
@@ -268,10 +277,10 @@ def test_revise_without_issues_is_an_error_on_the_whole_object() -> None:
 def test_pass_may_carry_issues() -> None:
     """A pass verdict with issues is valid"""
     critique = Critique.model_validate(
-        {"verdict": "pass", "issues": ["R3: minor wording"]}
+        {"verdict": "pass", "issues": ["description: minor wording"]}
     )
 
-    assert critique.issues == ["R3: minor wording"]
+    assert critique.issues == ["description: minor wording"]
 
 
 @pytest.mark.parametrize(
@@ -301,10 +310,56 @@ def test_confidence_sent_by_the_model_is_ignored() -> None:
     assert draft.confidence == 0.5
 
 
-def test_schema_sent_to_the_model_has_no_limits_or_confidence() -> None:
+@pytest.mark.parametrize("schema", [CardDraft, GroundedCardDraft])
+def test_schema_sent_to_the_model_has_no_limits_or_confidence(
+    schema: type[BaseModel],
+) -> None:
     """The model gets neither length limits nor the computed confidence"""
-    response_format = build_response_format(CardDraft)
+    response_format = build_response_format(schema)
     schema_text = json.dumps(response_format["json_schema"].get("schema"))
 
     assert "maxLength" not in schema_text
     assert "confidence" not in schema_text
+
+
+@pytest.mark.parametrize(
+    ("sources", "location"),
+    [
+        # An empty list: the list itself is invalid
+        ([], ("characteristics", "Power", "sources")),
+        # A label not of the form S<number>: that item is invalid
+        (["source 1"], ("characteristics", "Power", "sources", 0)),
+    ],
+    ids=["no label", "malformed label"],
+)
+def test_bad_source_labels_fail_under_characteristics(
+    sources: list[str], location: Location
+) -> None:
+    """A characteristic must cite at least one label of the form S1"""
+    # The error sits under the top-level field characteristics, so the model
+    # is asked to fix only that field, not the whole reply.
+    with pytest.raises(ValidationError) as caught:
+        validate_with(
+            GroundedCardDraft,
+            GROUNDED_DRAFT,
+            characteristics={"Power": {"value": "800 W", "sources": sources}},
+        )
+
+    assert [loc for loc, _ in read_errors(caught.value)] == [location]
+
+
+def test_empty_cited_value_becomes_missing_field() -> None:
+    """A blank or punctuation-only cited value moves to missing fields"""
+    draft = validate_with(
+        GroundedCardDraft,
+        GROUNDED_DRAFT,
+        characteristics={
+            "Power": {"value": "800 W", "sources": ["S1"]},
+            "Color": {"value": " — ", "sources": ["S2"]},
+        },
+        missing_fields=["Warranty"],
+    )
+
+    assert list(draft.characteristics) == ["Power"]
+    assert draft.missing_fields == ["Warranty", "Color"]
+    assert draft.confidence == 0.33

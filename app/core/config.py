@@ -14,6 +14,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BYTES_PER_MIB = 1024 * 1024
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_LLM_MODEL = "gemma-4-e4b-it"
+LLM_MODEL_CHANGED_MESSAGE = (
+    "LLM_MODEL is changed: also set LLM_TOKENIZER to the model's "
+    "Hugging Face repository"
+)
 DEFAULT_EMBEDDING_MODEL = "intfloat/multilingual-e5-base"
 # The values a model card fixes along with the model
 EMBEDDING_MODEL_CONTRACT = frozenset(
@@ -47,7 +52,10 @@ class Settings(BaseSettings):
     document_max_size_bytes: PositiveInt = 10 * BYTES_PER_MIB
     llm_base_url: str = "http://localhost:1234/v1"
     llm_api_key: str = "lm-studio"
-    llm_model: str = "gemma-4-e4b-it"
+    llm_model: str = DEFAULT_LLM_MODEL
+    # Counts the context budget (docs/adr/0006-context-budget-tokenizer.md).
+    # GGUF and MLX builds of a model share one tokenizer.
+    llm_tokenizer: str = "google/gemma-4-E4B-it"
     llm_timeout_s: PositiveFloat = 120
     # Retries after the first call, so the default makes three calls at most
     llm_max_retries: NonNegativeInt = 2
@@ -62,15 +70,13 @@ class Settings(BaseSettings):
     embedding_model: str = DEFAULT_EMBEDDING_MODEL
     # Must equal the dimension of the chunks.embedding column
     embedding_dimensions: PositiveInt = 768
-    # The e5 models were trained with these prefixes (see the model card);
-    # without them, matching pairs come out less similar.
+    # The e5 models were trained with these prefixes (see the model card)
     embedding_query_prefix: str = "query: "
     embedding_chunk_prefix: str = "passage: "
-    # fastembed's own default is the system temp directory, which the OS
-    # clears, and the download is about 1 GB.
+    # fastembed defaults to the temp directory, which the OS clears
     embedding_cache_dir: Path = REPOSITORY_ROOT / ".cache" / "models"
-    # Calibrated: above all noise (0.794, en), below every characteristic
-    # answer (0.798, ru); see the spec's Calibration section
+    # Calibrated on the search evaluation: above every noise query, below
+    # every answer (docs/specs/06-embeddings-and-search.md#calibration)
     search_min_similarity: float = Field(default=0.795, ge=-1, le=1)
 
     model_config = SettingsConfigDict(
@@ -100,15 +106,23 @@ class Settings(BaseSettings):
         return self
 
     @model_validator(mode="after")
+    def check_llm_model_change(self) -> Self:
+        """Reject a changed chat model without its tokenizer"""
+        # Code can't derive the tokenizer from a model server's model name.
+        if self.llm_model == DEFAULT_LLM_MODEL:
+            return self
+        if "llm_tokenizer" not in self.model_fields_set:
+            raise ValueError(LLM_MODEL_CHANGED_MESSAGE)
+        return self
+
+    @model_validator(mode="after")
     def check_embedding_model_change(self) -> Self:
         """Reject a changed embedding model without its card's values"""
-        # The prefixes live only in the model card, so code can't check their
-        # values. Requiring them makes someone decide, and the search
-        # evaluation catches a wrong decision. An empty prefix counts as set.
+        # Prefixes live only in the model card, so code can't check them; an
+        # empty prefix counts as set.
         if self.embedding_model == DEFAULT_EMBEDDING_MODEL:
             return self
-        # model_fields_set holds the fields given explicitly (environment,
-        # .env), not the ones left at their defaults.
+        # model_fields_set: the fields given explicitly, not left at defaults
         if not EMBEDDING_MODEL_CONTRACT.issubset(self.model_fields_set):
             raise ValueError(EMBEDDING_MODEL_CHANGED_MESSAGE)
         return self
@@ -117,10 +131,8 @@ class Settings(BaseSettings):
     @classmethod
     def resolve_cache_dir(cls, cache_dir: Path) -> Path:
         """Return the cache directory resolved against the repository root"""
-        # Pydantic runs this on a value from the environment before storing
-        # it. A relative path such as .cache/models is taken from the
-        # repository root, not from where a command starts, so the worker
-        # and the commands share one download. An absolute path stays as is.
+        # From the repository root, not the working directory, so the worker
+        # and the commands share one download.
         return REPOSITORY_ROOT / cache_dir
 
 

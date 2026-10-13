@@ -34,7 +34,10 @@ Prerequisites:
 - [uv](https://docs.astral.sh/uv/getting-started/installation/). It installs
   Python 3.12 if you don't have it.
 - [LM Studio](https://lmstudio.ai/), or another OpenAI-compatible server, with
-  the model from `LLM_MODEL` loaded. Only card generation needs it.
+  the model from `LLM_MODEL` loaded with a context length of at least 8,192
+  tokens (in LM Studio, set it when loading the model). A document job's
+  prompt holds up to 3,000 tokens of sources, and the reply up to 4,096. Only
+  card generation needs the model.
 
 ```bash
 git clone https://github.com/denbon05/llm-developer-project-432.git
@@ -46,21 +49,26 @@ make migrate-up         # in a second terminal
 ```
 
 The first `make worker` downloads the embedding model (about 1.1 GB) into
-`.cache/models/`. Tests load neither model.
+`.cache/models/`, and the tokenizer of `LLM_TOKENIZER` (about 30 MB) into the
+Hugging Face cache, `~/.cache/huggingface/`. The tokenizer counts the tokens
+of a document job's sources. If you change `LLM_MODEL`, set `LLM_TOKENIZER` to
+that model's Hugging Face repository too. Tests load neither model nor the
+tokenizer.
 
 ## Usage
 
 ### Run
 
 ```bash
-make run      # API, second terminal; API docs at http://localhost:8000/docs
+make api      # API, second terminal; API docs at http://localhost:8000/docs
 make worker   # worker, third terminal; Temporal UI at http://localhost:8233
 curl -s localhost:8000/health/ready
 ```
 
-The API needs the database at startup; the worker needs Temporal and the
-embedding model. [Spec 02](docs/specs/02-platform-foundation.md#behaviour)
-describes what happens when a dependency is down.
+The API needs the database at startup; the worker needs Temporal, the
+embedding model and the tokenizer.
+[Spec 02](docs/specs/02-platform-foundation.md#behaviour) describes what
+happens when a dependency is down.
 
 ### Card drafts
 
@@ -90,6 +98,32 @@ Specs [05](docs/specs/05-document-ingestion.md) and
 [06](docs/specs/06-embeddings-and-search.md) describe ingestion, search and
 the evaluation report.
 
+### Card drafts from documents
+
+Name 1–10 indexed documents and, optionally, the product. Without a hint, the
+first document's title names the product, so give one for price lists and
+spreadsheets that cover several models:
+
+```bash
+curl -s -X POST localhost:8000/api/v1/generate -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: demo-2' \
+  -d '{"document_ids": ["<id>", "<id>"], "hint": "FAN-40"}'
+curl -s localhost:8000/api/v1/jobs/<id>              # until awaiting_approval or needs_review
+curl -s -X POST localhost:8000/api/v1/jobs/<id>/approve
+```
+
+Each characteristic of the job's `result` cites source labels, and the job's
+`sources` give each label's chunk with its file, page, section and text:
+
+```text
+"result": {"characteristics": {"Power": {"value": "40 W", "sources": ["S1"]}}, …}
+"sources": [{"label": "S1", "filename": "fan_spec_1.xlsx", "page": 1,
+             "section": "Specification", "text": "FAN-40: Brand VentBriz; …", …}]
+```
+
+[Spec 07](docs/specs/07-grounded-generation.md) describes retrieval, the
+context and citation checks.
+
 ### Commands
 
 | Command | Does |
@@ -97,7 +131,7 @@ the evaluation report.
 | `make install` | create `.venv` and install locked dependencies |
 | `make infra` / `make down` | start PostgreSQL and Temporal / stop them |
 | `make migrate-up` | apply pending migrations (safe to repeat) |
-| `make run` | run the API on http://localhost:8000 with auto-reload |
+| `make api` | run the API on http://localhost:8000 with auto-reload |
 | `make worker` | run the worker that carries out jobs and document ingestion |
 | `make ingest [dir=<path>]` | upload a directory's documents and wait for their ingestion (default `evals/datasets`; `data/bulk/` is git-ignored for a local bulk set) |
 | `make reindex` | compute the chunk vectors that are missing or from another model |

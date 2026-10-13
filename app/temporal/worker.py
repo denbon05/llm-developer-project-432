@@ -6,15 +6,19 @@ from temporalio.worker import Worker
 from app.core import db
 from app.core.bootstrap import bootstrap
 from app.core.logging import get_logger
-from app.rag import embedder
+from app.rag import context, embedder
 from app.temporal.activities import (
+    build_context,
     chunk_document,
     critique_draft,
+    critique_grounded_draft,
     embed_document,
     extract_facts,
     generate_draft,
+    generate_grounded_draft,
     record_document_status,
     record_job_status,
+    verify_citations,
 )
 from app.temporal.client import connect_temporal_client
 from app.temporal.workflows import (
@@ -35,6 +39,8 @@ async def run_worker() -> None:
     # runs yet, so the few seconds it blocks (minutes on the first download)
     # hold nothing up.
     embedder.load_model()
+    # Also before any task: a tokenizer that can't load stops the worker.
+    context.load_tokenizer()
     # No database check: Temporal retries activities that find it down.
     await db.open_pool(settings)
     try:
@@ -57,6 +63,10 @@ async def run_worker() -> None:
                     extract_facts,
                     generate_draft,
                     critique_draft,
+                    build_context,
+                    generate_grounded_draft,
+                    verify_citations,
+                    critique_grounded_draft,
                     record_job_status,
                 ],
             ),

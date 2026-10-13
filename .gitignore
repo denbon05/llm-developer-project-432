@@ -21,3 +21,4 @@ CLAUDE.local.md
 .mypy_cache/
 
 .DS_Store
+tmp.*

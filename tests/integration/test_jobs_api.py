@@ -112,3 +112,17 @@ async def test_create_job_retries_pending_job_after_temporal_recovers(
     assert recovered.status_code == status.HTTP_202_ACCEPTED
     assert recovered.json()["status"] == JobStatus.PENDING
     assert started_workflows == [recovered_job_id, recovered_job_id]
+
+
+async def test_binary_body_is_rejected_without_echo(
+    api_client: httpx.AsyncClient,
+) -> None:
+    """A file sent to a JSON endpoint answers 422, not its bytes back"""
+    response = await api_client.post(
+        JOBS_URL,
+        content=b"%PDF-1.4\n%\x93\x8c",
+        headers={"Content-Type": "application/pdf"},
+    )
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert "input" not in response.json()["detail"][0]

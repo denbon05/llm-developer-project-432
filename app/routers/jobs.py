@@ -5,11 +5,11 @@ from fastapi import APIRouter, Header, status
 
 from app.repositories import jobs as jobs_repository
 from app.schemas.jobs import (
-    JobCreate,
     JobStatus,
     JobStatusSummary,
     JobView,
     RejectRequest,
+    SupplierTextJobRequest,
 )
 from app.temporal.client import (
     send_approval,
@@ -23,23 +23,20 @@ APPROVE_PATH = "/jobs/{job_id}/approve"
 REJECT_PATH = "/jobs/{job_id}/reject"
 IDEMPOTENCY_KEY_HEADER = "Idempotency-Key"
 
+IdempotencyKey = Annotated[
+    str | None,
+    Header(alias=IDEMPOTENCY_KEY_HEADER, min_length=1, max_length=255),
+]
+
 router = APIRouter(tags=["jobs"])
 
 
 @router.post(JOBS_PATH, status_code=status.HTTP_202_ACCEPTED)
-async def create_job(
-    body: JobCreate,
-    idempotency_key: Annotated[
-        str | None,
-        Header(
-            alias=IDEMPOTENCY_KEY_HEADER,
-            min_length=1,
-            max_length=255,
-        ),
-    ] = None,
+async def create_supplier_text_job(
+    body: SupplierTextJobRequest, idempotency_key: IdempotencyKey = None
 ) -> JobStatusSummary:
     """Create a job, or find it again by its key, and start its workflow"""
-    job, _was_created = await jobs_repository.create_job(body, idempotency_key)
+    job, _was_stored = await jobs_repository.store_job(body, idempotency_key)
     # A job that has moved on already has its workflow.
     # Retrying pending jobs recovers rows left by a failed workflow start.
     if job.status == JobStatus.PENDING:

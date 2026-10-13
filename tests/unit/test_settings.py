@@ -5,11 +5,14 @@ from pydantic import ValidationError
 
 from app.core.config import (
     EMBEDDING_MODEL_CHANGED_MESSAGE,
+    LLM_MODEL_CHANGED_MESSAGE,
     REPOSITORY_ROOT,
     Settings,
 )
 
-OTHER_MODEL = "intfloat/multilingual-e5-large"
+NON_DEFAULT_EMBEDDING_MODEL = "intfloat/multilingual-e5-large"
+NON_DEFAULT_LLM_MODEL = "qwen3-8b"
+NON_DEFAULT_LLM_TOKENIZER = "Qwen/Qwen3-8B"
 CONTRACT = {
     "EMBEDDING_DIMENSIONS": "1024",
     "EMBEDDING_QUERY_PREFIX": "query: ",
@@ -33,7 +36,7 @@ def test_changed_model_without_its_card_values_fails(
     monkeypatch: pytest.MonkeyPatch, unset: str
 ) -> None:
     """A changed model needs its dimension and both prefixes set"""
-    monkeypatch.setenv("EMBEDDING_MODEL", OTHER_MODEL)
+    monkeypatch.setenv("EMBEDDING_MODEL", NON_DEFAULT_EMBEDDING_MODEL)
     for name, value in CONTRACT.items():
         if name != unset:
             monkeypatch.setenv(name, value)
@@ -46,14 +49,14 @@ def test_changed_model_with_its_card_values_loads(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """With all three set, an empty prefix included, settings load"""
-    monkeypatch.setenv("EMBEDDING_MODEL", OTHER_MODEL)
+    monkeypatch.setenv("EMBEDDING_MODEL", NON_DEFAULT_EMBEDDING_MODEL)
     for name, value in CONTRACT.items():
         monkeypatch.setenv(name, value)
     monkeypatch.setenv("EMBEDDING_QUERY_PREFIX", "")
 
     settings = load_settings()
 
-    assert settings.embedding_model == OTHER_MODEL
+    assert settings.embedding_model == NON_DEFAULT_EMBEDDING_MODEL
     assert settings.embedding_dimensions == int(
         CONTRACT["EMBEDDING_DIMENSIONS"]
     )
@@ -67,3 +70,23 @@ def test_relative_cache_dir_is_resolved_against_the_repository(
     monkeypatch.setenv("EMBEDDING_CACHE_DIR", "models")
 
     assert load_settings().embedding_cache_dir == REPOSITORY_ROOT / "models"
+
+
+def test_changed_llm_model_without_tokenizer_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A changed chat model needs its tokenizer set"""
+    monkeypatch.setenv("LLM_MODEL", NON_DEFAULT_LLM_MODEL)
+
+    with pytest.raises(ValidationError, match=LLM_MODEL_CHANGED_MESSAGE):
+        load_settings()
+
+
+def test_changed_llm_model_with_tokenizer_loads(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With the tokenizer set, a changed chat model loads"""
+    monkeypatch.setenv("LLM_MODEL", NON_DEFAULT_LLM_MODEL)
+    monkeypatch.setenv("LLM_TOKENIZER", NON_DEFAULT_LLM_TOKENIZER)
+
+    assert load_settings().llm_tokenizer == NON_DEFAULT_LLM_TOKENIZER

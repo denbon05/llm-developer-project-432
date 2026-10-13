@@ -154,6 +154,9 @@ Business endpoints live under `/api/v1`. Errors answer `{"detail": "…"}`.
   to statuses: not found 404, conflict 409, invalid request 422, a dependency
   unavailable 503, a dependency answering with something unusable 502. Any
   other exception is a bug and answers 500.
+- **Invalid bodies** answer `422` with each error's type, location and
+  message. The answer never echoes the input: a binary body can't be encoded
+  as JSON, and supplier data stays out of responses.
 - **Bodies:** `supplier_text` is non-empty and at most 20,000 characters.
   `reason` is 1–2,000 characters.
 - **Idempotency:** the optional `Idempotency-Key` header (1–255 characters)

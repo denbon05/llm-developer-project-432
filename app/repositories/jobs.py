@@ -7,13 +7,40 @@ import asyncpg
 
 from app.core import db
 from app.core.errors import ConflictError, InvalidRequestError, NotFoundError
+from app.schemas.cards import SOURCE_LABEL_PREFIX
 from app.schemas.jobs import (
     ALLOWED_TRANSITIONS,
     DECISION_STATUSES,
-    JobCreate,
+    DocumentJobRequest,
     JobStatusUpdate,
     JobView,
+    SupplierTextJobRequest,
 )
+
+# Every column, plus the job's sources joined from its context's chunk ids,
+# in label order. A chunk that no longer exists drops out.
+JOB_VIEW_COLUMNS = f"""
+    jobs.*,
+    (SELECT COALESCE(
+                jsonb_agg(
+                    jsonb_build_object(
+                        'label', '{SOURCE_LABEL_PREFIX}' || context.position,
+                        'chunk_id', chunks.id,
+                        'document_id', chunks.document_id,
+                        'filename', documents.filename,
+                        'page', chunks.metadata -> 'page',
+                        'section', chunks.metadata -> 'section',
+                        'text', chunks.text
+                    )
+                    ORDER BY context.position
+                ),
+                '[]'
+            )
+     FROM unnest(jobs.context_chunk_ids)
+         WITH ORDINALITY AS context (chunk_id, position)
+     JOIN chunks ON chunks.id = context.chunk_id
+     JOIN documents ON documents.id = chunks.document_id) AS sources
+"""
 
 
 class JobNotFoundError(NotFoundError):
@@ -59,25 +86,28 @@ def to_job(row: asyncpg.Record) -> JobView:
         critique_issues=row["critique_issues"],
         error=row["error"],
         decision_reason=row["decision_reason"],
+        sources=row["sources"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
 
 
-async def create_job(
-    job_request: JobCreate, idempotency_key: str | None
+async def store_job(
+    request: SupplierTextJobRequest | DocumentJobRequest,
+    idempotency_key: str | None,
 ) -> tuple[JobView, bool]:
-    """Store a pending job; return it and whether it was newly created"""
-    payload = job_request.model_dump()
+    """Store the request as a pending job, unless its key already has one"""
+    # JSON mode: UUIDs become strings, which jsonb can hold.
+    payload = request.model_dump(mode="json")
     request_hash = hash_request(payload)
     async with db.connection() as conn:
         # ON CONFLICT leaves no race window between a check and the insert.
         row = await conn.fetchrow(
-            """
+            f"""
             INSERT INTO jobs (idempotency_key, request_hash, payload)
             VALUES ($1, $2, $3)
             ON CONFLICT (idempotency_key) DO NOTHING
-            RETURNING *
+            RETURNING {JOB_VIEW_COLUMNS}
             """,
             idempotency_key,
             request_hash,
@@ -86,7 +116,8 @@ async def create_job(
         if row is not None:
             return to_job(row), True
         row = await conn.fetchrow(
-            "SELECT * FROM jobs WHERE idempotency_key = $1", idempotency_key
+            f"SELECT {JOB_VIEW_COLUMNS} FROM jobs WHERE idempotency_key = $1",
+            idempotency_key,
         )
     if row is None or row["request_hash"] != request_hash:
         raise IdempotencyKeyReusedError()
@@ -96,7 +127,9 @@ async def create_job(
 async def get_job(job_id: UUID) -> JobView:
     """Return the job with this id"""
     async with db.connection() as conn:
-        row = await conn.fetchrow("SELECT * FROM jobs WHERE id = $1", job_id)
+        row = await conn.fetchrow(
+            f"SELECT {JOB_VIEW_COLUMNS} FROM jobs WHERE id = $1", job_id
+        )
     if row is None:
         raise JobNotFoundError()
     return to_job(row)
@@ -117,7 +150,7 @@ async def update_job_status(update: JobStatusUpdate) -> JobView:
         # Counting and timestamps happen in the database, and the status
         # guard stops a late retry from moving a job backwards.
         row = await conn.fetchrow(
-            """
+            f"""
             UPDATE jobs
             SET status = $2,
                 attempts = CASE WHEN $3 THEN attempts + 1 ELSE attempts END,
@@ -127,7 +160,7 @@ async def update_job_status(update: JobStatusUpdate) -> JobView:
                 decision_reason = COALESCE($7, decision_reason),
                 updated_at = now()
             WHERE id = $1 AND status = ANY($8::text[])
-            RETURNING *
+            RETURNING {JOB_VIEW_COLUMNS}
             """,
             update.job_id,
             update.status,
@@ -140,7 +173,8 @@ async def update_job_status(update: JobStatusUpdate) -> JobView:
         )
         if row is None:
             row = await conn.fetchrow(
-                "SELECT * FROM jobs WHERE id = $1", update.job_id
+                f"SELECT {JOB_VIEW_COLUMNS} FROM jobs WHERE id = $1",
+                update.job_id,
             )
     if row is None:
         raise JobNotFoundError()
@@ -148,3 +182,31 @@ async def update_job_status(update: JobStatusUpdate) -> JobView:
     if row["status"] != update.status:
         raise InvalidJobTransitionError(row["status"], update.status)
     return to_job(row)
+
+
+async def store_context(job_id: UUID, chunk_ids: list[UUID]) -> None:
+    """Store the chunk ids of the job's context, in label order"""
+    # Written whole, so a repeated write leaves the same context.
+    async with db.connection() as conn:
+        stored_id = await conn.fetchval(
+            """
+            UPDATE jobs SET context_chunk_ids = $2, updated_at = now()
+            WHERE id = $1
+            RETURNING id
+            """,
+            job_id,
+            chunk_ids,
+        )
+    if stored_id is None:
+        raise JobNotFoundError()
+
+
+async def get_context_chunk_ids(job_id: UUID) -> list[UUID]:
+    """Return the chunk ids of the job's context, in label order"""
+    async with db.connection() as conn:
+        chunk_ids = await conn.fetchval(
+            "SELECT context_chunk_ids FROM jobs WHERE id = $1", job_id
+        )
+    if chunk_ids is None:
+        raise JobNotFoundError()
+    return chunk_ids

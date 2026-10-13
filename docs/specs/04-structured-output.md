@@ -262,14 +262,19 @@ llm_call_completed model=… latency_s=… …
   gets a value. Revisions work as before.
 - **Critic:** title length is checked by code, so the critic no longer gets
   the measured length. Title wording is left to the generator prompt and the
-  human decision. Each issue cites one of these rules:
-  - **R1.** Every characteristic in the draft appears in the facts, with a
-    value the facts support.
-  - **R2.** The draft lists every missing field from the facts and gives none
-    of them a value.
-  - **R3.** The description, benefits and SEO text state nothing absent from
-    the facts.
-  - **R4.** All text is in the language of the facts.
+  human decision. The critic checks the draft against this checklist:
+  1. Every characteristic in the draft appears in the facts, with a value
+     the facts support.
+  2. The draft lists every missing field from the facts and gives none of
+     them a value.
+  3. The description, benefits and SEO text state nothing absent from the
+     facts.
+  4. All text is in the language of the facts.
+
+  An issue starts with the draft field it concerns, for example
+  `missing_fields: warranty is missing`. It doesn't cite a checklist number,
+  because the generator reads the issues and doesn't know the numbers
+  (changed in [07](07-grounded-generation.md#prompts)).
 
 ### Routing
 

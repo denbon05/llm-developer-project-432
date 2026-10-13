@@ -43,6 +43,19 @@ verify in a minute instead of writing in an hour.
 - **Reindex**: computing the embeddings that are missing or were made by
   another model. _Avoid_: backfill, re-embedding.
 
+### Grounding
+
+- **Hint**: optional text in a generation request that names the target
+  product, such as a SKU. _Avoid_: query (search builds its query from the
+  hint), prompt.
+- **Source**: a chunk as the generator sees it, under a label unique within
+  the job (`S1`). _Avoid_: evidence, reference.
+- **Context**: the sources one job's generation and critique see, in label
+  order. _Avoid_: retrieved set.
+- **Context budget**: the most tokens the sources of a context may take.
+- **Citation**: a characteristic's reference to the label of a source that
+  states its value. _Avoid_: link, quote.
+
 ### Output
 
 - **Card draft**: a generated product card; a draft until a human approves
@@ -60,12 +73,13 @@ verify in a minute instead of writing in an hour.
 
 - **Extractor**: the model role that turns supplier input into supplier
   facts.
-- **Generator**: the model role that writes a card draft from supplier facts.
-  _Avoid_: writer.
+- **Generator**: the model role that writes a card draft from supplier facts
+  or from sources. _Avoid_: writer.
 - **Critic**: the model role that checks a card draft against the supplier
-  facts. _Avoid_: reviewer, validator, judge.
+  facts or the sources. _Avoid_: reviewer, validator, judge.
 - **Critique**: the critic's verdict (`pass` or `revise`) and issues, each
-  citing a rule. _Avoid_: review, feedback report.
+  naming the source or draft field it concerns. _Avoid_: review, feedback
+  report.
 - **Revision**: another generation round after a `revise` verdict. _Avoid_:
   retry, regeneration.
 - **Revision budget**: the maximum number of generation rounds for one card
@@ -84,6 +98,10 @@ verify in a minute instead of writing in an hour.
 
 - **Job**: one request to produce a card draft, tracked until it reaches a
   terminal status. _Avoid_: task, request.
+- **Supplier-text job**: a job whose input is supplier text; the extractor
+  turns it into supplier facts, and its card draft has no citations.
+- **Document job**: a job whose input is indexed supplier documents and an
+  optional hint; its card draft cites sources.
 - **Workflow**: the durable Temporal execution that carries out a job or an
   ingestion. _Avoid_: process, pipeline run.
 - **Status**: a job's or a document's position in its lifecycle, as recorded

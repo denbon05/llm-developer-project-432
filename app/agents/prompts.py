@@ -4,8 +4,10 @@ from app.schemas.cards import (
     META_DESCRIPTION_MAX_LENGTH,
     META_TITLE_MAX_LENGTH,
     CardDraft,
+    GroundedCardDraft,
     SupplierFacts,
 )
+from app.schemas.jobs import Source
 
 # Sampling parameters live with the prompts they tune, not in settings: they
 # define how each role behaves, the same in every environment, so a change
@@ -72,26 +74,115 @@ Write all text in the language of the supplier facts.
 No Markdown, only valid JSON."""
 
 CRITIC_INSTRUCTIONS = """\
-You check a product card draft against the supplier facts and these rules:
-R1. Every characteristic in the draft appears in the facts, with a value the \
+You check a product card draft against the supplier facts and this checklist:
+1. Every characteristic in the draft appears in the facts, with a value the \
 facts support.
-R2. The draft lists every missing field from the facts and gives none of \
-them a value.
-R3. The description, benefits and SEO text state nothing absent from the \
+2. The draft lists every missing field from the facts and gives none of them \
+a value.
+3. The description, benefits and SEO text state nothing absent from the \
 facts.
-R4. All text is in the language of the facts.
+4. All text is in the language of the facts.
 
 Return only a JSON object with exactly these fields:
-- verdict (string): "pass" if the draft breaks no rule, otherwise "revise"
-- issues (array of strings): one entry per broken rule, starting with the \
-rule it breaks (for example: "R2: warranty is missing from missing_fields"); \
-empty when the verdict is "pass"
+- verdict (string): "pass" if the draft meets every item, otherwise "revise"
+- issues (array of strings): one entry per problem, starting with the draft \
+field it concerns, never with a checklist number (for example: \
+"missing_fields: warranty is missing"); empty when the verdict is "pass"
 
 No Markdown, only valid JSON."""
+
+# For document jobs, where no extractor runs
+GROUNDED_GENERATOR_INSTRUCTIONS = f"""\
+You write a product card for an online marketplace from supplier documents. \
+The user message names the product and gives sources: pieces of the \
+documents, each in a <source> tag with an id.
+
+Return only a JSON object with exactly these fields:
+- title (string): at most {CARD_TITLE_MAX_LENGTH} characters; names the \
+product type and at least one key specification
+- description (string): 3-4 sentences, specific, no filler
+- characteristics (object): characteristic names mapped to objects with \
+these fields:
+  - value (string): the value as the sources state it
+  - sources (array of strings): the ids of the sources that state the \
+value (for example: ["S1"])
+- benefits (array of strings): 3-5 benefits for the buyer
+- seo (object) with these fields:
+  - meta_title (string): at most {META_TITLE_MAX_LENGTH} characters
+  - meta_description (string): at most {META_DESCRIPTION_MAX_LENGTH} \
+characters
+  - keywords (array of strings): 3-8 search keywords
+- missing_fields (array of strings): characteristics that a buyer of this \
+product type expects on its card but no source states (for example: \
+warranty, color, package contents, country of origin)
+
+Use only the sources. Never add a characteristic or a claim that the \
+sources do not contain.
+Every characteristic cites the ids of the sources that state its value.
+Describe only the named product. Sources about other models are context, \
+never values.
+The card is for a retail buyer: leave out wholesale prices, order and \
+delivery terms, and the supplier's company and contacts.
+Each benefit turns a fact from the sources into a benefit for the buyer. \
+Never praise the product beyond what the sources state.
+A value saying the product lacks a feature, such as "no", is a value: keep \
+it in characteristics, never in missing_fields.
+If no source states a characteristic, put its name in missing_fields and \
+leave it out of characteristics. Never write a placeholder such as "not \
+specified", "unknown" or "N/A", or its equivalent in another language, as a \
+value.
+A name is either in characteristics or in missing_fields, never in both.
+If a previous draft and issues are given, fix every issue and keep the rest \
+of the draft.
+Write all text in the main language of the sources.
+No Markdown, only valid JSON."""
+
+GROUNDED_CRITIC_INSTRUCTIONS = """\
+You check a product card draft against the sources it was written from: \
+pieces of supplier documents, each in a <source> tag with an id. The user \
+message names the product the card draft is for. Check the draft against \
+this checklist:
+1. Each characteristic's value is stated in the sources it cites.
+2. Each missing field is absent from every source. A feature the sources \
+state as "no" is a value, not a missing field.
+3. The description, benefits and SEO text state nothing that the sources \
+don't, praise included.
+4. All text is in the main language of the sources.
+5. Each characteristic's sources describe the named product, not another \
+model.
+6. The card leaves out wholesale prices, order and delivery terms, and the \
+supplier's company and contacts.
+
+Return only a JSON object with exactly these fields:
+- verdict (string): "pass" if the draft meets every item, otherwise "revise"
+- issues (array of strings): one entry per problem, starting with the id of \
+the source or the name of the draft field it concerns, never with a \
+checklist number; empty when the verdict is "pass". For example:
+  - "S1: Power is 40 W in S1, the draft says 45 W"
+  - "S3: Weight 2.7 kg is from model X-2, not the named product"
+  - "missing_fields: Package contents is listed as missing, but S2 lists it"
+  - "description: 'quiet operation' is stated in no source"
+
+No Markdown, only valid JSON."""
+
+# Issues the citation check sends back to the generator
+CITATION_NOT_IN_CONTEXT_ISSUE = (
+    'Characteristic "{name}" cites {label}, but no source {label} was given. '
+    'Cite only ids of the <source> tags above, or move "{name}" to '
+    "missing_fields if no source states it."
+)
+CITATION_CHUNK_MISSING_ISSUE = (
+    'Characteristic "{name}" cites {label}, but that source is no longer '
+    'available. Cite another source that states it, or move "{name}" to '
+    "missing_fields."
+)
 
 REPLY_ERRORS_INTRO = "Your reply has these errors:"
 OUTPUT_REPAIR_REQUEST = "Return only the whole JSON object, corrected."
 FIELD_FIX_REQUEST = "Return only a JSON object with the corrected fields: {}."
+# Ends a named field of a <source> tag
+FIELD_DELIMITER = '"'
+ESCAPED_FIELD_DELIMITER = "&quot;"
 
 
 def build_extractor_messages(supplier_text: str) -> list[ChatMessage]:
@@ -102,7 +193,7 @@ def build_extractor_messages(supplier_text: str) -> list[ChatMessage]:
     ]
 
 
-def format_draft(draft: CardDraft) -> str:
+def format_draft(draft: CardDraft | GroundedCardDraft) -> str:
     """Return the draft as the JSON a role reads"""
     return draft.model_dump_json(indent=2, exclude=CODE_ONLY_DRAFT_FIELDS)
 
@@ -135,6 +226,66 @@ def build_critic_messages(
     ]
     return [
         ChatMessage(role="system", content=CRITIC_INSTRUCTIONS),
+        ChatMessage(role="user", content="\n\n".join(sections)),
+    ]
+
+
+def format_source(source: Source) -> str:
+    """Return the source in a <source> tag, its metadata as named fields"""
+    # A tag marks where each source starts and ends. Escaping keeps a `"` in
+    # a file name from ending its field.
+    fields = {
+        "id": source.label,
+        "file": source.filename,
+        "page": str(source.page),
+        "section": source.section,
+    }
+    named_fields = " ".join(
+        f'{name}="{value.replace(FIELD_DELIMITER, ESCAPED_FIELD_DELIMITER)}"'
+        for name, value in fields.items()
+        if value is not None
+    )
+    return f"<source {named_fields}>\n{source.text}\n</source>"
+
+
+def format_sources(sources: list[Source]) -> str:
+    """Return the sources as <source> tags, in label order"""
+    return "\n".join(format_source(source) for source in sources)
+
+
+def build_grounded_generator_messages(
+    product_line: str,
+    sources: list[Source],
+    feedback: list[str] | None = None,
+    previous_draft: GroundedCardDraft | None = None,
+) -> list[ChatMessage]:
+    """Return the generator's messages for these sources and any revision"""
+    sections = [
+        f"Product: {product_line}",
+        f"Sources:\n{format_sources(sources)}",
+    ]
+    if previous_draft is not None:
+        sections.append(f"Previous draft:\n{format_draft(previous_draft)}")
+    if feedback:
+        issues = "\n".join(f"- {issue}" for issue in feedback)
+        sections.append(f"Issues to fix:\n{issues}")
+    return [
+        ChatMessage(role="system", content=GROUNDED_GENERATOR_INSTRUCTIONS),
+        ChatMessage(role="user", content="\n\n".join(sections)),
+    ]
+
+
+def build_grounded_critic_messages(
+    product_line: str, sources: list[Source], draft: GroundedCardDraft
+) -> list[ChatMessage]:
+    """Return the critic's messages for this draft and its sources"""
+    sections = [
+        f"Product: {product_line}",
+        f"Sources:\n{format_sources(sources)}",
+        f"Card draft:\n{format_draft(draft)}",
+    ]
+    return [
+        ChatMessage(role="system", content=GROUNDED_CRITIC_INSTRUCTIONS),
         ChatMessage(role="user", content="\n\n".join(sections)),
     ]
 

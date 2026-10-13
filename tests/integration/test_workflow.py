@@ -44,7 +44,9 @@ DRAFT = CardDraft(
 # Confidence 0.5: one characteristic found, one missing
 SPARSE_DRAFT = DRAFT.model_copy(update={"missing_fields": ["Warranty"]})
 PASS = Critique(verdict="pass")
-REVISE = Critique(verdict="revise", issues=["R3: the description adds a claim"])
+REVISE = Critique(
+    verdict="revise", issues=["description: adds a claim absent from the facts"]
+)
 REJECT_REASON = "The description is too short."
 STATUS_WAIT_TIMEOUT_S = 10
 STATUS_POLL_INTERVAL_S = 0.05

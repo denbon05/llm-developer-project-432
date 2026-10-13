@@ -9,7 +9,7 @@ down:
 install:
 	uv sync --frozen
 
-run:
+api:
 	uv run uvicorn app.main:create_app --factory --reload
 
 worker:

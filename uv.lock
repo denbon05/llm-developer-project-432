@@ -719,6 +719,7 @@ dependencies = [
     { name = "structlog" },
     { name = "temporalio" },
     { name = "tenacity" },
+    { name = "tokenizers" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
@@ -750,6 +751,7 @@ requires-dist = [
     { name = "structlog" },
     { name = "temporalio" },
     { name = "tenacity" },
+    { name = "tokenizers" },
     { name = "uvicorn", extras = ["standard"] },
 ]
 

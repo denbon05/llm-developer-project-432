@@ -10,6 +10,7 @@ from app.schemas.documents import (
     DocumentStatus,
     SearchRequest,
     SearchResult,
+    StoredChunk,
 )
 
 # Each hybrid branch keeps at least 20 candidates, so a chunk 8th by meaning
@@ -229,6 +230,37 @@ async def replace_chunks(document_id: UUID, chunks: list[Chunk]) -> None:
             """,
             [(document_id, chunk.text, chunk.metadata) for chunk in chunks],
         )
+
+
+async def find_document_chunks(document_ids: list[UUID]) -> list[StoredChunk]:
+    """Return the documents' chunks, document by document, in reading order"""
+    async with db.connection() as conn:
+        rows = await conn.fetch(
+            f"""
+            SELECT id, document_id, text, metadata FROM chunks
+            WHERE document_id = ANY($1::uuid[])
+            ORDER BY array_position($1::uuid[], document_id), {CHUNK_POSITION}
+            """,
+            document_ids,
+        )
+    return [
+        StoredChunk(
+            chunk_id=row["id"],
+            document_id=row["document_id"],
+            text=row["text"],
+            metadata=row["metadata"],
+        )
+        for row in rows
+    ]
+
+
+async def find_existing_chunk_ids(chunk_ids: list[UUID]) -> set[UUID]:
+    """Return the ones of these chunk ids that are stored"""
+    async with db.connection() as conn:
+        rows = await conn.fetch(
+            "SELECT id FROM chunks WHERE id = ANY($1::uuid[])", chunk_ids
+        )
+    return {row["id"] for row in rows}
 
 
 async def find_document_chunks_to_embed(

@@ -51,7 +51,8 @@ SPARSE_DRAFT = DRAFT.model_copy(
 )
 PASS = Critique(verdict="pass")
 REVISE = Critique(
-    verdict="revise", issues=["R3: turbo mode is absent from the facts"]
+    verdict="revise",
+    issues=["description: turbo mode is absent from the facts"],
 )
 
 

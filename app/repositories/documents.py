@@ -120,6 +120,21 @@ async def find_documents(status: DocumentStatus) -> list[DocumentView]:
     return [to_document(row) for row in rows]
 
 
+async def find_documents_by_id(
+    document_ids: list[UUID],
+) -> dict[UUID, DocumentView]:
+    """Return the stored ones of these documents, by id"""
+    async with db.connection() as conn:
+        rows = await conn.fetch(
+            f"""
+            SELECT {DOCUMENT_VIEW_COLUMNS} FROM documents
+            WHERE id = ANY($1::uuid[])
+            """,
+            document_ids,
+        )
+    return {row["id"]: to_document(row) for row in rows}
+
+
 async def find_documents_by_content(
     content_sha256s: list[str], status: DocumentStatus
 ) -> dict[str, DocumentView]:

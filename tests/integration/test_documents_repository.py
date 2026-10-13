@@ -11,6 +11,7 @@ from app.schemas.documents import (
     DocumentStatus,
     DocumentStatusUpdate,
 )
+from tests.integration.seeds import store_chunks, store_document
 
 # Every test in this file gets the pool on the test database, and the
 # database is emptied after each test, so no rows leak between tests.
@@ -214,3 +215,32 @@ async def test_replacing_chunks_twice_leaves_one_set() -> None:
 
     document = await documents_repository.get_document(document_id)
     assert document.chunk_count == 2
+
+
+async def test_document_chunks_come_by_document_in_reading_order() -> None:
+    """Documents in the order asked for, each one's chunks by position"""
+    first_id, second_id = await store_document(), await store_document()
+    # Stored last to first, so only the position gives the reading order.
+    await chunks_repository.replace_chunks(
+        first_id, list(reversed(build_chunks("Alpha", "Beta")))
+    )
+    await chunks_repository.replace_chunks(second_id, build_chunks("Gamma"))
+
+    chunks = await chunks_repository.find_document_chunks([second_id, first_id])
+
+    assert [(chunk.document_id, chunk.text) for chunk in chunks] == [
+        (second_id, "Gamma"),
+        (first_id, "Alpha"),
+        (first_id, "Beta"),
+    ]
+
+
+async def test_existing_chunk_ids_leave_out_unknown_ones() -> None:
+    """Only the ids of stored chunks come back"""
+    [chunk_id] = await store_chunks(await store_document(), "Alpha")
+
+    existing_ids = await chunks_repository.find_existing_chunk_ids(
+        [chunk_id, uuid4()]
+    )
+
+    assert existing_ids == {chunk_id}

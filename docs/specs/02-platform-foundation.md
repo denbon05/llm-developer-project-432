@@ -73,8 +73,8 @@ The layering rules apply to every later step. They live in
 ### Configuration
 
 `core/config.py` is the only place that reads the environment. `.env.example`
-lists only what differs between environments: URLs, credentials and the model
-name. Tuning settings have defaults in code and can still be overridden.
+lists only what differs between environments: URLs, credentials, and the
+model with its tokenizer. Tuning settings have defaults in code and can still be overridden.
 
 | Variable | Default | Used by |
 |----------|---------|---------|
