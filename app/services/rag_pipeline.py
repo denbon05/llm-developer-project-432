@@ -3,14 +3,9 @@ from uuid import UUID
 from app.agents.prompts import (
     CITATION_CHUNK_MISSING_ISSUE,
     CITATION_NOT_IN_CONTEXT_ISSUE,
-    CRITIC_MAX_TOKENS,
-    CRITIC_TEMPERATURE,
-    GENERATOR_MAX_TOKENS,
-    GENERATOR_TEMPERATURE,
     build_grounded_critic_messages,
     build_grounded_generator_messages,
 )
-from app.core.config import get_settings
 from app.core.errors import ConflictError, NotFoundError, ServiceError
 from app.core.logging import get_logger
 from app.rag import retrieval
@@ -30,6 +25,10 @@ from app.schemas.documents import (
     SearchRequest,
 )
 from app.schemas.jobs import Source
+from app.services.pipeline import (
+    build_critique_params,
+    build_generate_params,
+)
 from app.services.structured import complete_structured
 
 # Hybrid search candidates the context is assembled from
@@ -156,17 +155,13 @@ async def generate(
     previous_draft: GroundedCardDraft | None = None,
 ) -> GroundedCardDraft:
     """Return a card draft written from the job's sources and any issues"""
-    settings = get_settings()
     sources = await read_sources(job_id)
     return await complete_structured(
         build_grounded_generator_messages(
             product_line, sources, feedback, previous_draft
         ),
+        params=build_generate_params(),
         response_schema=GroundedCardDraft,
-        temperature=GENERATOR_TEMPERATURE,
-        max_tokens=GENERATOR_MAX_TOKENS,
-        timeout_s=settings.llm_generate_timeout_s,
-        max_retries=settings.llm_generate_max_retries,
     )
 
 
@@ -209,13 +204,14 @@ async def critique(
     job_id: UUID, product_line: str, draft: GroundedCardDraft
 ) -> Critique:
     """Return the critic's verdict on the draft against the job's sources"""
-    settings = get_settings()
     sources = await read_sources(job_id)
-    return await complete_structured(
+    reply = await complete_structured(
         build_grounded_critic_messages(product_line, sources, draft),
+        params=build_critique_params(),
         response_schema=Critique,
-        temperature=CRITIC_TEMPERATURE,
-        max_tokens=CRITIC_MAX_TOKENS,
-        timeout_s=settings.llm_critique_timeout_s,
-        max_retries=settings.llm_critique_max_retries,
     )
+    # The job keeps only the last round's issues; the log keeps every round's.
+    logger.info(
+        "critique_completed", verdict=reply.verdict, issues=reply.issues
+    )
+    return reply

@@ -71,7 +71,7 @@ def test_generator_gets_the_product_line_and_source_tags() -> None:
 
 
 def test_critic_gets_the_product_line_sources_draft_and_checklist() -> None:
-    """The critic sees what the generator saw, the draft and six items"""
+    """The critic sees what the generator saw, the draft and its checklist"""
     [system_message, user_message] = build_grounded_critic_messages(
         PRODUCT_LINE, SOURCES, DRAFT
     )
@@ -80,9 +80,10 @@ def test_critic_gets_the_product_line_sources_draft_and_checklist() -> None:
         f"Product: {PRODUCT_LINE}\n\nSources:\n{SOURCE_TAGS}\n\nCard draft:\n"
     )
     assert "confidence" not in user_message.content
-    assert CHECKLIST_ITEM.findall(system_message.content) == [
-        f"{number}. " for number in range(1, 7)
-    ]
+    # Numbered from 1 without gaps, however many items there are
+    items = CHECKLIST_ITEM.findall(system_message.content)
+    assert items
+    assert items == [f"{number}. " for number in range(1, len(items) + 1)]
 
 
 @pytest.mark.parametrize(

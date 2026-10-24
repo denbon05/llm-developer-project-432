@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from structlog.testing import capture_logs
 
 from app.agents.prompts import FIELD_FIX_REQUEST, OUTPUT_REPAIR_REQUEST
-from app.llm.client import ChatMessage
+from app.llm.client import CallParams, CallPurpose, ChatMessage
 from app.schemas.cards import CARD_TITLE_MAX_LENGTH, CardDraft
 from app.services.json_utils import EMPTY_REPLY
 from app.services.structured import (
@@ -45,11 +45,14 @@ async def request_draft() -> CardDraft:
     """Return a card draft from the substituted model"""
     return await complete_structured(
         MESSAGES,
+        params=CallParams(
+            purpose=CallPurpose.GENERATE,
+            temperature=0,
+            max_tokens=1,
+            timeout_s=1,
+            max_retries=0,
+        ),
         response_schema=CardDraft,
-        temperature=0,
-        max_tokens=1,
-        timeout_s=1,
-        max_retries=0,
     )
 
 

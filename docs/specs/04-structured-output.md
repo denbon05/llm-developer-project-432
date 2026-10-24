@@ -45,9 +45,10 @@ never filled.
   it.
 - Critique issues tied to fields, and revisions that rewrite only those
   fields. A revision still rewrites the whole draft.
-- Strict structured-output mode and strict-compatible schemas, and a label on
-  every client log line naming the call's purpose (08, with cloud models and
-  the call ledger).
+- Strict structured-output mode and strict-compatible schemas. LM Studio
+  constrains decoding to the schema without the flag
+  ([08](08-cost-tracing-evaluation.md#non-goals)).
+- A label on every client log line naming the call's purpose (08).
 - A confidence the model assesses itself (see [Confidence](#confidence)).
 - Masking personal data in logs and stored errors (09).
 - Compatibility with drafts stored, or workflows started, before this spec.

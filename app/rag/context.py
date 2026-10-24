@@ -4,7 +4,6 @@ from uuid import UUID
 
 from tokenizers import Tokenizer
 
-from app.core.config import get_settings
 from app.schemas.cards import normalize_name
 from app.schemas.documents import SearchResult, StoredChunk
 
@@ -14,6 +13,10 @@ MAX_SOURCES = 12
 # Leaves room in an 8k-token window for the instructions, a previous draft
 # and a reply of up to 4,096 tokens.
 CONTEXT_BUDGET_TOKENS = 3000
+# One fixed tokenizer whatever model serves the call: the critic may run on
+# another model than the generator, and both read the same sources
+# (docs/adr/0006-context-budget-tokenizer.md).
+TOKENIZER_REPOSITORY = "google/gemma-4-E4B-it"
 
 ContextChunk = SearchResult | StoredChunk
 
@@ -35,15 +38,15 @@ class AssembledContext(NamedTuple):
 
 
 def load_tokenizer() -> None:
-    """Load the chat model's tokenizer, downloading it on first use"""
+    """Load the tokenizer, downloading it on first use"""
     global _tokenizer
     # The first load downloads tokenizer.json into the Hugging Face cache;
     # later loads read it from disk.
-    _tokenizer = Tokenizer.from_pretrained(get_settings().llm_tokenizer)
+    _tokenizer = Tokenizer.from_pretrained(TOKENIZER_REPOSITORY)
 
 
 def count_tokens(text: str) -> int:
-    """Return how many tokens the chat model reads the text as"""
+    """Return how many tokens the text takes"""
     if _tokenizer is None:
         raise TokenizerNotLoadedError("the tokenizer is not loaded")
     # Counts the text alone, without the start and end markers a tokenizer

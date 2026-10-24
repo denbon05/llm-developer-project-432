@@ -74,7 +74,7 @@ The layering rules apply to every later step. They live in
 
 `core/config.py` is the only place that reads the environment. `.env.example`
 lists only what differs between environments: URLs, credentials, and the
-model with its tokenizer. Tuning settings have defaults in code and can still be overridden.
+models with their prices. Tuning settings have defaults in code and can still be overridden.
 
 | Variable | Default | Used by |
 |----------|---------|---------|
@@ -129,9 +129,10 @@ file names. They keep the traits later stages must handle:
 - [ ] Numbers embedded in SKUs are not characteristics: `VCS-180` still has a
       documented power of `500 W`.
 - [ ] Reference values use the same wording and units as the documents.
-- [ ] `fan_passport_fan_45_scan.pdf` has no text layer. It is
-      `fan_passport_fan_45.pdf` rendered at 150 dpi in grayscale and saved as
-      an image-only PDF.
+- [ ] The scanned passport, `fan_passport_fan_45_scan.pdf`, lives only in
+      `tests/fixtures/documents/`: it tests that a PDF without a text layer
+      is refused, and has nothing to evaluate. It is `fan_passport_fan_45.pdf`
+      rendered at 150 dpi in grayscale and saved as an image-only PDF.
 - [ ] `blender_kp_ru.docx` and `coffee_passport_cfe_1000.pdf` stay in
       Russian, their original language.
 

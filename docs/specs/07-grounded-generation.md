@@ -50,7 +50,7 @@ A human decision ends the job, as in [03](03-generation-pipeline.md).
   product enter the context first, whole.
 - **GND-3 — Context:** each source has a label unique within the job.
   Duplicate texts across documents appear once. The context holds at most
-  12 sources and 3,000 tokens, counted with the configured model's tokenizer.
+  12 sources and 3,000 tokens, counted with a fixed tokenizer.
 - **GND-4 — Citations:** every characteristic of the draft cites at least one
   source label.
 - **GND-5 — Citation verification:** a cited label must be in the job's
@@ -339,17 +339,10 @@ run make reindex if the embedding model changed`, and the job fails.
 
 ### Token counting
 
-- The budget is counted with the tokenizer of the model behind the LLM
-  client ([ADR 0006](../adr/0006-context-budget-tokenizer.md)).
-- **`LLM_TOKENIZER`** is the model's Hugging Face repository. The default is
-  `google/gemma-4-E4B-it`, the tokenizer of the default `LLM_MODEL`; GGUF and
-  MLX builds of the model share it. The setting is in `.env.example` next to
-  `LLM_MODEL`, because changing the model means changing its tokenizer.
-- **Model change guard:** when `LLM_MODEL` differs from its default,
-  `LLM_TOKENIZER` must be set explicitly, as the embedding model guard
-  requires ([06](06-embeddings-and-search.md#settings)). Otherwise settings
-  fail with `LLM_MODEL is changed: also set LLM_TOKENIZER to the model's
-  Hugging Face repository`.
+- The budget is counted with one fixed tokenizer, `google/gemma-4-E4B-it`,
+  whatever model serves the call
+  ([ADR 0006](../adr/0006-context-budget-tokenizer.md)). For another model
+  the count is within 10–20%, which the window's margin absorbs.
 - **Loading:**
   - the tokenizer is loaded through the `tokenizers` library, which is
     already installed with fastembed;
@@ -535,7 +528,7 @@ any non-terminal status ──────────────────�
 | Many documents chosen | Documents that name the product enter whole. A useful chunk of a document that doesn't name it may not fit in 12 sources. |
 | One section repeated in two passports | One copy, from the document that comes first. |
 | English and Russian versions of one offer chosen together | The model picks the main language. The critic's language check catches mixed text, which leads to a revision or `needs_review`. |
-| `LLM_TOKENIZER` not changed with the model | Settings refuse to load (the guard). If it is set wrong on purpose, the budget is off by 10–20%, which an 8k window absorbs. |
+| `LLM_MODEL` changed to a model with another tokenizer | The budget is off by 10–20%, which an 8k window absorbs. |
 | No hint, and the first document is a spreadsheet | The title is the sheet name, which names no product. A table of several models needs a hint; the README says so. |
 | A document is `parsing`, `embedding` or `failed` | `409`, listing each such document with its status. |
 | No chunk can be retrieved | `EmptyContextError`; the job is `failed` with the message above. |
@@ -592,8 +585,6 @@ Each behaviour is tested once, at the cheapest level that shows it.
   existence check returns the ids that exist; a job's sources come back in
   label order with file, page and section; `retrieving` follows `pending`
   and precedes `generating`.
-- **Settings:** a changed `LLM_MODEL` without `LLM_TOKENIZER` fails, and with
-  it passes.
 - **No downloads:** an autouse fixture makes loading the tokenizer fail in
   every test, as one already does for the embedding model. Captured logs of
   assembly and verification hold no chunk text.

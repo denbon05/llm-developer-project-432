@@ -14,11 +14,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BYTES_PER_MIB = 1024 * 1024
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_LLM_MODEL = "gemma-4-e4b-it"
-LLM_MODEL_CHANGED_MESSAGE = (
-    "LLM_MODEL is changed: also set LLM_TOKENIZER to the model's "
-    "Hugging Face repository"
-)
 DEFAULT_EMBEDDING_MODEL = "intfloat/multilingual-e5-base"
 # The values a model card fixes along with the model
 EMBEDDING_MODEL_CONTRACT = frozenset(
@@ -52,10 +47,9 @@ class Settings(BaseSettings):
     document_max_size_bytes: PositiveInt = 10 * BYTES_PER_MIB
     llm_base_url: str = "http://localhost:1234/v1"
     llm_api_key: str = "lm-studio"
-    llm_model: str = DEFAULT_LLM_MODEL
-    # Counts the context budget (docs/adr/0006-context-budget-tokenizer.md).
-    # GGUF and MLX builds of a model share one tokenizer.
-    llm_tokenizer: str = "google/gemma-4-E4B-it"
+    llm_model: str = "gemma-4-e4b-it"
+    llm_cheap_model: str = Field(default_factory=lambda data: data["llm_model"])
+    llm_judge_model: str = Field(default_factory=lambda data: data["llm_model"])
     llm_timeout_s: PositiveFloat = 120
     # Retries after the first call, so the default makes three calls at most
     llm_max_retries: NonNegativeInt = 2
@@ -103,16 +97,6 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "a stage LLM retry count exceeds LLM_MAX_RETRIES"
                 )
-        return self
-
-    @model_validator(mode="after")
-    def check_llm_model_change(self) -> Self:
-        """Reject a changed chat model without its tokenizer"""
-        # Code can't derive the tokenizer from a model server's model name.
-        if self.llm_model == DEFAULT_LLM_MODEL:
-            return self
-        if "llm_tokenizer" not in self.model_fields_set:
-            raise ValueError(LLM_MODEL_CHANGED_MESSAGE)
         return self
 
     @model_validator(mode="after")

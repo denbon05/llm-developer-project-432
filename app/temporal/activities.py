@@ -2,6 +2,7 @@ from uuid import UUID
 
 from temporalio import activity
 
+from app.core.logging import get_logger
 from app.repositories import documents as documents_repository
 from app.repositories import jobs as jobs_repository
 from app.schemas.cards import (
@@ -19,6 +20,8 @@ from app.services import rag_pipeline
 # Each activity is one retry unit and one entry in the workflow history.
 # Every activity is async def: Temporal needs a thread pool only for plain
 # def activities, and blocking work goes through asyncio.to_thread instead.
+
+logger = get_logger(__name__)
 
 
 @activity.defn
@@ -86,6 +89,9 @@ async def critique_grounded_draft(
 async def record_job_status(update: JobStatusUpdate) -> None:
     """Write the job's new status to the database"""
     await jobs_repository.update_job_status(update)
+    # No service sits between this activity and the repository, so the trace
+    # line for a status is written here.
+    logger.info("job_status_recorded", status=update.status)
 
 
 @activity.defn

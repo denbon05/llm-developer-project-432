@@ -1,10 +1,13 @@
+import time
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from http import HTTPStatus
+from uuid import uuid4
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from structlog.contextvars import bound_contextvars
 
 from app.core import db
 from app.core.bootstrap import bootstrap
@@ -26,6 +29,8 @@ from app.routers.jobs import router as jobs_router
 from app.routers.workflows import router as workflows_router
 
 API_PREFIX = "/api/v1"
+REQUEST_ID_HEADER = "X-Request-ID"
+MS_PER_S = 1000
 
 logger = get_logger(__name__)
 
@@ -41,6 +46,26 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         yield
     finally:
         await db.close_pool()
+
+
+async def trace_request(
+    request: Request, call_next: Callable[[Request], Awaitable[Response]]
+) -> Response:
+    """Tie the request's log lines to a new id and log how it ended"""
+    request_id = uuid4().hex
+    started_at = time.perf_counter()
+    with bound_contextvars(request_id=request_id):
+        response = await call_next(request)
+        response.headers[REQUEST_ID_HEADER] = request_id
+        # Replaces uvicorn's access log, which knows no request id.
+        logger.info(
+            "request_completed",
+            method=request.method,
+            path=request.url.path,
+            status_code=response.status_code,
+            duration_ms=round((time.perf_counter() - started_at) * MS_PER_S),
+        )
+    return response
 
 
 def respond_with(
@@ -81,6 +106,7 @@ async def respond_to_invalid_request(
 def create_app() -> FastAPI:
     """Create the FastAPI application"""
     application = FastAPI(lifespan=lifespan)
+    application.middleware("http")(trace_request)
 
     application.add_exception_handler(
         RequestValidationError, respond_to_invalid_request

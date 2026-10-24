@@ -1,7 +1,9 @@
 import asyncio
 import time
-from functools import cache
+from enum import StrEnum
+from functools import cache, partial
 from typing import Literal, cast
+from uuid import UUID
 
 import openai
 from openai.types.chat import ChatCompletionMessageParam
@@ -19,13 +21,19 @@ from tenacity import (
 
 from app.core.config import get_settings
 from app.core.errors import UnavailableError, UpstreamError
-from app.core.logging import get_logger
+from app.core.logging import get_logger, read_trace_ids
+from app.llm import cost
+from app.repositories import llm_calls as llm_calls_repository
+from app.repositories.llm_calls import LlmCall
 
 RETRY_AFTER_HEADER = "retry-after"
 TOO_MANY_REQUESTS = 429
 SERVER_ERROR_MIN_CODE = 500
 BACKOFF_MULTIPLIER_S = 0.5
 BACKOFF_MAX_S = 8.0
+MS_PER_S = 1000
+LATENCY_DIGITS = 2
+
 
 logger = get_logger(__name__)
 # Full jitter
@@ -46,6 +54,25 @@ class LlmRequestError(UpstreamError):
     message = "model rejected the request"
 
 
+class CallPurpose(StrEnum):
+    """What a model call is for; it chooses the model and labels the call"""
+
+    EXTRACT = "extract"
+    GENERATE = "generate"
+    CRITIQUE = "critique"
+    JUDGE = "judge"
+
+
+class CallParams(BaseModel):
+    """How to make one model call: what it is for, and its limits"""
+
+    purpose: CallPurpose
+    temperature: float
+    max_tokens: int
+    timeout_s: float
+    max_retries: int
+
+
 class ChatMessage(BaseModel):
     """One message of a model conversation"""
 
@@ -57,9 +84,11 @@ class Completion(BaseModel):
     """The model's reply to one call"""
 
     text: str
+    # The model the call asked for: prices are set by this name.
     model: str
-    prompt_tokens: int
-    completion_tokens: int
+    # None when the server reported no usage
+    prompt_tokens: int | None
+    completion_tokens: int | None
     latency_s: float
 
 
@@ -107,15 +136,28 @@ def wait_before_retry(retry_state: RetryCallState) -> float:
     return min(retry_after_s, BACKOFF_MAX_S)
 
 
-def log_retry(retry_state: RetryCallState) -> None:
+def log_retry(purpose: CallPurpose, retry_state: RetryCallState) -> None:
     """Log a failed call that is about to be retried"""
     error = retry_state.outcome.exception() if retry_state.outcome else None
     logger.warning(
         "llm_call_retry",
+        purpose=purpose,
         attempt=retry_state.attempt_number,
         delay_s=round(retry_state.upcoming_sleep, 2),
         error=repr(error),
     )
+
+
+def choose_model(purpose: CallPurpose) -> str:
+    """Return the model that serves calls of this purpose"""
+    settings = get_settings()
+    # Checking a draft against its sources is a narrower task than writing
+    # it, so the critic can run on a cheaper model.
+    if purpose == CallPurpose.CRITIQUE:
+        return settings.llm_cheap_model
+    if purpose == CallPurpose.JUDGE:
+        return settings.llm_judge_model
+    return settings.llm_model
 
 
 class SchemaWithoutLengthLimits(GenerateJsonSchema):
@@ -148,10 +190,9 @@ def build_response_format(
 
 async def request_completion(
     messages: list[ChatMessage],
+    model: str,
     response_schema: type[BaseModel] | None,
-    temperature: float,
-    max_tokens: int,
-    timeout_s: float,
+    params: CallParams,
 ) -> Completion:
     """Make one call to the model and return its completion"""
     # Our messages have exactly the shape of the SDK's message dicts.
@@ -161,69 +202,108 @@ async def request_completion(
     )
     started_at = time.perf_counter()
     response = await get_openai_client().chat.completions.create(
-        model=get_settings().llm_model,
+        model=model,
         messages=message_params,
         response_format=(
             build_response_format(response_schema)
             if response_schema
             else openai.omit
         ),
-        temperature=temperature,
-        max_tokens=max_tokens,
-        timeout=timeout_s,
+        temperature=params.temperature,
+        max_tokens=params.max_tokens,
+        timeout=params.timeout_s,
     )
     usage = response.usage
-    completion = Completion(
+    return Completion(
         text=response.choices[0].message.content or "",
-        model=response.model,
-        # TODO: verify usage, ensure we don't have budget calc gap
-        prompt_tokens=usage.prompt_tokens if usage else 0,
-        completion_tokens=usage.completion_tokens if usage else 0,
+        model=model,
+        prompt_tokens=usage.prompt_tokens if usage else None,
+        completion_tokens=usage.completion_tokens if usage else None,
         latency_s=time.perf_counter() - started_at,
+    )
+
+
+async def record_call(purpose: CallPurpose, completion: Completion) -> None:
+    """Log the call with its cost and add it to the call ledger"""
+    # Recorded here, at the one boundary every model call passes, so no call
+    # site can forget it.
+    if completion.prompt_tokens is None:
+        logger.warning(
+            "llm_usage_missing", purpose=purpose, model=completion.model
+        )
+    price = cost.PRICES.get(completion.model)
+    if price is None:
+        logger.warning(
+            "llm_price_missing", purpose=purpose, model=completion.model
+        )
+    cost_usd = cost.compute_cost(
+        prompt_tokens=completion.prompt_tokens,
+        completion_tokens=completion.completion_tokens,
+        price=price,
     )
     logger.info(
         "llm_call_completed",
+        purpose=purpose,
         model=completion.model,
-        latency_s=round(completion.latency_s, 2),
+        latency_s=round(completion.latency_s, LATENCY_DIGITS),
         prompt_tokens=completion.prompt_tokens,
         completion_tokens=completion.completion_tokens,
+        cost_usd=None if cost_usd is None else str(cost_usd),
     )
-    return completion
+    job_id, request_id = read_trace_ids()
+    try:
+        await llm_calls_repository.store_call(
+            LlmCall(
+                job_id=UUID(job_id) if job_id else None,
+                request_id=request_id,
+                purpose=purpose,
+                model=completion.model,
+                prompt_tokens=completion.prompt_tokens,
+                completion_tokens=completion.completion_tokens,
+                cost_usd=cost_usd,
+                latency_ms=round(completion.latency_s * MS_PER_S),
+            )
+        )
+    # The model has answered and been paid for: failing the call would make
+    # Temporal call it again.
+    except Exception:
+        logger.exception("llm_call_not_recorded", purpose=purpose)
 
 
 async def complete(
     messages: list[ChatMessage],
     *,
+    params: CallParams,
     response_schema: type[BaseModel] | None = None,
-    temperature: float,
-    max_tokens: int,
-    timeout_s: float,
-    max_retries: int,
 ) -> Completion:
     """Return the model's completion for these messages"""
     retrying = AsyncRetrying(
         retry=retry_if_exception(is_retryable),
-        stop=stop_after_attempt(max_retries + 1),
+        stop=stop_after_attempt(params.max_retries + 1),
         wait=wait_before_retry,
         sleep=asyncio.sleep,
-        before_sleep=log_retry,
+        before_sleep=partial(log_retry, params.purpose),
         reraise=True,
     )
     try:
-        return await retrying(
+        completion = await retrying(
             request_completion,
             messages,
+            choose_model(params.purpose),
             response_schema,
-            temperature,
-            max_tokens,
-            timeout_s,
+            params,
         )
     except openai.OpenAIError as error:
         logger.error(
             "llm_call_failed",
+            purpose=params.purpose,
             attempt=retrying.statistics.get("attempt_number"),
             error=repr(error),
         )
         if is_retryable(error):
             raise LlmUnavailableError() from error
         raise LlmRequestError() from error
+
+    await record_call(params.purpose, completion)
+
+    return completion

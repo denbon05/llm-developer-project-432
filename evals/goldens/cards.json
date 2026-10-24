@@ -1,1 +1,165 @@
-{}
+{
+  "subset": ["fan-40-en", "blender-800-ru", "coffee-1000-ru"],
+  "cases": [
+    {
+      "id": "fan-40-en",
+      "documents": ["fan_passport_fan_40.pdf", "fan_spec_1.xlsx"],
+      "hint": "FAN-40",
+      "characteristics": [
+        {"names": ["Model"], "values": ["VentBriz 40", "40"], "where": [{"file": "fan_passport_fan_40.pdf", "page": 1, "section": "Technical specifications"}, {"file": "fan_spec_1.xlsx", "page": 1, "sku": "FAN-40"}, {"file": "fan_passport_fan_40.pdf", "page": 1, "section": "VentBriz 40 Fan"}]},
+        {"names": ["SKU", "Article", "Article number"], "values": ["FAN-40"], "where": [{"file": "fan_passport_fan_40.pdf", "page": 1, "section": "Technical specifications"}, {"file": "fan_spec_1.xlsx", "page": 1, "sku": "FAN-40"}]},
+        {"names": ["Brand", "Trademark"], "values": ["VentBriz"], "where": [{"file": "fan_spec_1.xlsx", "page": 1, "sku": "FAN-40"}, {"file": "fan_passport_fan_40.pdf", "page": 1, "section": "VentBriz 40 Fan"}]},
+        {"names": ["Power", "Rated power", "Power consumption"], "values": ["40 W"], "where": [{"file": "fan_passport_fan_40.pdf", "page": 1, "section": "Technical specifications"}, {"file": "fan_spec_1.xlsx", "page": 1, "sku": "FAN-40"}]},
+        {"names": ["Blade diameter", "Blade size", "Fan diameter"], "values": ["27 cm"], "where": [{"file": "fan_passport_fan_40.pdf", "page": 1, "section": "Technical specifications"}, {"file": "fan_spec_1.xlsx", "page": 1, "sku": "FAN-40"}, {"file": "fan_passport_fan_40.pdf", "page": 1, "section": "VentBriz 40 Fan"}]},
+        {"names": ["Controls", "Control", "Control type"], "values": ["mechanical"], "where": [{"file": "fan_passport_fan_40.pdf", "page": 1, "section": "Technical specifications"}]},
+        {"names": ["Speeds", "Number of speeds", "Speed settings"], "values": ["4", "4 speeds"], "where": [{"file": "fan_passport_fan_40.pdf", "page": 1, "section": "Technical specifications"}, {"file": "fan_passport_fan_40.pdf", "page": 1, "section": "VentBriz 40 Fan"}]},
+        {"names": ["Oscillation", "Rotation", "Oscillation angle"], "values": ["yes, 90°", "90°", "yes (90°)", "automatic, 90°", "automatic 90°"], "where": [{"file": "fan_passport_fan_40.pdf", "page": 1, "section": "Technical specifications"}, {"file": "fan_passport_fan_40.pdf", "page": 1, "section": "VentBriz 40 Fan"}]},
+        {"names": ["Sleep timer", "Timer"], "values": ["no"], "where": [{"file": "fan_passport_fan_40.pdf", "page": 1, "section": "Technical specifications"}]},
+        {"names": ["Power supply", "Mains supply", "Voltage"], "values": ["220 V, 50 Hz", "220 V / 50 Hz", "220 V"], "where": [{"file": "fan_passport_fan_40.pdf", "page": 1, "section": "Technical specifications"}]},
+        {"names": ["Weight"], "values": ["2.5 kg"], "where": [{"file": "fan_passport_fan_40.pdf", "page": 1, "section": "Technical specifications"}, {"file": "fan_spec_1.xlsx", "page": 1, "sku": "FAN-40"}]},
+        {"names": ["Color", "Colour"], "values": ["black"], "where": [{"file": "fan_passport_fan_40.pdf", "page": 1, "section": "Technical specifications"}]},
+        {"names": ["Warranty", "Warranty period"], "values": ["12 months", "12 months from the date of sale"], "where": [{"file": "fan_passport_fan_40.pdf", "page": 1, "section": "Technical specifications"}, {"file": "fan_passport_fan_40.pdf", "page": 2, "section": "Warranty obligations"}]},
+        {"names": ["Country of origin", "Country of manufacture", "Made in"], "values": ["Russia"], "where": [{"file": "fan_passport_fan_40.pdf", "page": 1, "section": "Technical specifications"}]},
+        {"names": ["Package contents", "Contents", "In the box", "Package", "Package includes", "Included"], "where": [{"file": "fan_passport_fan_40.pdf", "page": 2, "section": "Package contents"}]}
+      ],
+      "missing_fields": []
+    },
+    {
+      "id": "fan-45-en",
+      "documents": ["fan_passport_fan_45.pdf"],
+      "hint": "FAN-45",
+      "characteristics": [
+        {"names": ["Model"], "values": ["VentBriz 45"], "where": [{"file": "fan_passport_fan_45.pdf", "page": 1, "section": "Technical specifications"}, {"file": "fan_passport_fan_45.pdf", "page": 1, "section": "VentBriz 45 Fan"}]},
+        {"names": ["SKU", "Article", "Article number"], "values": ["FAN-45"], "where": [{"file": "fan_passport_fan_45.pdf", "page": 1, "section": "Technical specifications"}]},
+        {"names": ["Power", "Rated power", "Power consumption"], "values": ["45 W"], "where": [{"file": "fan_passport_fan_45.pdf", "page": 1, "section": "Technical specifications"}]},
+        {"names": ["Blade diameter", "Blade size", "Fan diameter"], "values": ["30 cm"], "where": [{"file": "fan_passport_fan_45.pdf", "page": 1, "section": "Technical specifications"}, {"file": "fan_passport_fan_45.pdf", "page": 1, "section": "VentBriz 45 Fan"}]},
+        {"names": ["Controls", "Control", "Control type"], "values": ["electronic, remote control", "electronic, with remote control", "electronic with remote control"], "where": [{"file": "fan_passport_fan_45.pdf", "page": 1, "section": "Technical specifications"}]},
+        {"names": ["Speeds", "Number of speeds", "Speed settings"], "values": ["3", "3 speeds"], "where": [{"file": "fan_passport_fan_45.pdf", "page": 1, "section": "Technical specifications"}, {"file": "fan_passport_fan_45.pdf", "page": 1, "section": "VentBriz 45 Fan"}]},
+        {"names": ["Oscillation", "Rotation", "Oscillation angle"], "values": ["yes, 90°", "90°", "yes (90°)", "automatic, 90°", "automatic 90°"], "where": [{"file": "fan_passport_fan_45.pdf", "page": 1, "section": "Technical specifications"}, {"file": "fan_passport_fan_45.pdf", "page": 1, "section": "VentBriz 45 Fan"}]},
+        {"names": ["Sleep timer", "Timer"], "values": ["yes"], "where": [{"file": "fan_passport_fan_45.pdf", "page": 1, "section": "Technical specifications"}]},
+        {"names": ["Power supply", "Mains supply", "Voltage"], "values": ["220 V, 50 Hz", "220 V / 50 Hz", "220 V"], "where": [{"file": "fan_passport_fan_45.pdf", "page": 1, "section": "Technical specifications"}]},
+        {"names": ["Weight"], "values": ["2.7 kg"], "where": [{"file": "fan_passport_fan_45.pdf", "page": 1, "section": "Technical specifications"}]},
+        {"names": ["Color", "Colour"], "values": ["graphite"], "where": [{"file": "fan_passport_fan_45.pdf", "page": 1, "section": "Technical specifications"}]},
+        {"names": ["Warranty", "Warranty period"], "values": ["12 months", "12 months from the date of sale"], "where": [{"file": "fan_passport_fan_45.pdf", "page": 1, "section": "Technical specifications"}, {"file": "fan_passport_fan_45.pdf", "page": 1, "section": "Warranty obligations"}]},
+        {"names": ["Country of origin", "Country of manufacture", "Made in"], "values": ["China"], "where": [{"file": "fan_passport_fan_45.pdf", "page": 1, "section": "Technical specifications"}]}
+      ],
+      "missing_fields": [
+        {"names": ["Package contents", "Contents", "In the box", "Package", "Package includes", "Included"]}
+      ]
+    },
+    {
+      "id": "vacuum-180-en",
+      "documents": ["vacuum_passport_vcs_180.pdf", "vacuum_spec_1.xlsx"],
+      "hint": "VCS-180",
+      "characteristics": [
+        {"names": ["Model"], "values": ["Pylesos 180", "180"], "where": [{"file": "vacuum_passport_vcs_180.pdf", "page": 1, "section": "Technical specifications"}, {"file": "vacuum_spec_1.xlsx", "page": 1, "sku": "VCS-180"}, {"file": "vacuum_passport_vcs_180.pdf", "page": 1, "section": "Pylesos 180 Upright Vacuum Cleaner"}]},
+        {"names": ["SKU", "Article", "Article number"], "values": ["VCS-180"], "where": [{"file": "vacuum_passport_vcs_180.pdf", "page": 1, "section": "Technical specifications"}, {"file": "vacuum_spec_1.xlsx", "page": 1, "sku": "VCS-180"}]},
+        {"names": ["Brand", "Trademark"], "values": ["Pylesos"], "where": [{"file": "vacuum_spec_1.xlsx", "page": 1, "sku": "VCS-180"}, {"file": "vacuum_passport_vcs_180.pdf", "page": 1, "section": "Pylesos 180 Upright Vacuum Cleaner"}]},
+        {"names": ["Power", "Rated power", "Power consumption"], "values": ["500 W"], "where": [{"file": "vacuum_passport_vcs_180.pdf", "page": 1, "section": "Technical specifications"}, {"file": "vacuum_spec_1.xlsx", "page": 1, "sku": "VCS-180"}]},
+        {"names": ["Cleaning type", "Cleaning"], "values": ["dry", "dry cleaning"], "where": [{"file": "vacuum_passport_vcs_180.pdf", "page": 1, "section": "Technical specifications"}, {"file": "vacuum_passport_vcs_180.pdf", "page": 1, "section": "Pylesos 180 Upright Vacuum Cleaner"}]},
+        {"names": ["Dustbin volume", "Dustbin capacity", "Dust container volume", "Dust container capacity"], "values": ["0.3 L"], "where": [{"file": "vacuum_passport_vcs_180.pdf", "page": 1, "section": "Technical specifications"}, {"file": "vacuum_spec_1.xlsx", "page": 1, "sku": "VCS-180"}]},
+        {"names": ["Battery runtime", "Battery life", "Runtime", "Run time", "Operating time"], "values": ["20 min", "up to 20 min", "20 minutes", "up to 20 minutes"], "where": [{"file": "vacuum_passport_vcs_180.pdf", "page": 1, "section": "Technical specifications"}, {"file": "vacuum_passport_vcs_180.pdf", "page": 1, "section": "Pylesos 180 Upright Vacuum Cleaner"}]},
+        {"names": ["Filter", "Filter type"], "values": ["HEPA 13", "HEPA13", "HEPA H13"], "where": [{"file": "vacuum_passport_vcs_180.pdf", "page": 1, "section": "Technical specifications"}]},
+        {"names": ["Power supply", "Mains supply", "Voltage"], "values": ["220 V, 50 Hz", "220 V / 50 Hz", "220 V"], "where": [{"file": "vacuum_passport_vcs_180.pdf", "page": 1, "section": "Technical specifications"}]},
+        {"names": ["Weight"], "values": ["1.8 kg"], "where": [{"file": "vacuum_passport_vcs_180.pdf", "page": 1, "section": "Technical specifications"}, {"file": "vacuum_spec_1.xlsx", "page": 1, "sku": "VCS-180"}]},
+        {"names": ["Color", "Colour"], "values": ["white"], "where": [{"file": "vacuum_passport_vcs_180.pdf", "page": 1, "section": "Technical specifications"}]},
+        {"names": ["Warranty", "Warranty period"], "values": ["24 months", "24 months from the date of sale"], "where": [{"file": "vacuum_passport_vcs_180.pdf", "page": 1, "section": "Technical specifications"}, {"file": "vacuum_passport_vcs_180.pdf", "page": 2, "section": "Warranty obligations"}]},
+        {"names": ["Country of origin", "Country of manufacture", "Made in"], "values": ["China"], "where": [{"file": "vacuum_passport_vcs_180.pdf", "page": 1, "section": "Technical specifications"}]},
+        {"names": ["Package contents", "Contents", "In the box", "Package", "Package includes", "Included"], "where": [{"file": "vacuum_passport_vcs_180.pdf", "page": 2, "section": "Package contents"}]}
+      ],
+      "missing_fields": []
+    },
+    {
+      "id": "vacuum-210-en",
+      "documents": ["vacuum_spec_1.xlsx"],
+      "hint": "VCS-210",
+      "characteristics": [
+        {"names": ["Model"], "values": ["Pylesos 210", "210"], "where": [{"file": "vacuum_spec_1.xlsx", "page": 1, "sku": "VCS-210"}]},
+        {"names": ["SKU", "Article", "Article number"], "values": ["VCS-210"], "where": [{"file": "vacuum_spec_1.xlsx", "page": 1, "sku": "VCS-210"}]},
+        {"names": ["Brand", "Trademark"], "values": ["Pylesos"], "where": [{"file": "vacuum_spec_1.xlsx", "page": 1, "sku": "VCS-210"}]},
+        {"names": ["Power", "Rated power", "Power consumption"], "values": ["550 W"], "where": [{"file": "vacuum_spec_1.xlsx", "page": 1, "sku": "VCS-210"}]},
+        {"names": ["Dustbin volume", "Dustbin capacity", "Dust container volume", "Dust container capacity"], "values": ["0.35 L"], "where": [{"file": "vacuum_spec_1.xlsx", "page": 1, "sku": "VCS-210"}]},
+        {"names": ["Weight"], "values": ["1.9 kg"], "where": [{"file": "vacuum_spec_1.xlsx", "page": 1, "sku": "VCS-210"}]}
+      ],
+      "missing_fields": [
+        {"names": ["Cleaning type", "Cleaning"]},
+        {"names": ["Battery runtime", "Battery life", "Runtime", "Run time", "Operating time"]},
+        {"names": ["Filter", "Filter type"]},
+        {"names": ["Power supply", "Mains supply", "Voltage"]},
+        {"names": ["Color", "Colour"]},
+        {"names": ["Warranty", "Warranty period"]},
+        {"names": ["Country of origin", "Country of manufacture", "Made in"]},
+        {"names": ["Package contents", "Contents", "In the box", "Package", "Package includes", "Included"]}
+      ]
+    },
+    {
+      "id": "blender-800-ru",
+      "documents": ["blender_kp_ru.docx"],
+      "hint": "BLD-800",
+      "characteristics": [
+        {"names": ["Модель"], "values": ["МиксерПро 800"], "where": [{"file": "blender_kp_ru.docx", "page": 1, "sku": "BLD-800"}]},
+        {"names": ["Артикул", "SKU"], "values": ["BLD-800"], "where": [{"file": "blender_kp_ru.docx", "page": 1, "sku": "BLD-800"}]},
+        {"names": ["Мощность", "Номинальная мощность", "Потребляемая мощность"], "values": ["800 Вт"], "where": [{"file": "blender_kp_ru.docx", "page": 1, "sku": "BLD-800"}]},
+        {"names": ["Цвет"], "values": ["графитовый", "графит"], "where": [{"file": "blender_kp_ru.docx", "page": 1, "sku": "BLD-800"}]}
+      ],
+      "missing_fields": []
+    },
+    {
+      "id": "blender-500-en",
+      "documents": ["blender_kp.docx"],
+      "hint": "BLD-500",
+      "characteristics": [
+        {"names": ["Model"], "values": ["MixerPro 500"], "where": [{"file": "blender_kp.docx", "page": 1, "sku": "BLD-500"}]},
+        {"names": ["SKU", "Article", "Article number"], "values": ["BLD-500"], "where": [{"file": "blender_kp.docx", "page": 1, "sku": "BLD-500"}]},
+        {"names": ["Power", "Rated power", "Power consumption"], "values": ["500 W"], "where": [{"file": "blender_kp.docx", "page": 1, "sku": "BLD-500"}]},
+        {"names": ["Color", "Colour"], "values": ["white"], "where": [{"file": "blender_kp.docx", "page": 1, "sku": "BLD-500"}]}
+      ],
+      "missing_fields": []
+    },
+    {
+      "id": "coffee-1000-ru",
+      "documents": ["coffee_passport_cfe_1000.pdf"],
+      "hint": null,
+      "characteristics": [
+        {"names": ["Модель"], "values": ["КофеАрт 1000"], "where": [{"file": "coffee_passport_cfe_1000.pdf", "page": 1, "section": "Технические характеристики"}, {"file": "coffee_passport_cfe_1000.pdf", "page": 1, "section": "Кофеварка капельная «КофеАрт 1000»"}]},
+        {"names": ["Артикул", "SKU"], "values": ["CFE-1000"], "where": [{"file": "coffee_passport_cfe_1000.pdf", "page": 1, "section": "Технические характеристики"}]},
+        {"names": ["Мощность", "Номинальная мощность", "Потребляемая мощность"], "values": ["1000 Вт"], "where": [{"file": "coffee_passport_cfe_1000.pdf", "page": 1, "section": "Технические характеристики"}]},
+        {"names": ["Объём колбы", "Объём", "Объём кофейника"], "values": ["1,2 л"], "where": [{"file": "coffee_passport_cfe_1000.pdf", "page": 1, "section": "Технические характеристики"}]},
+        {"names": ["Тип фильтра", "Фильтр"], "values": ["многоразовый"], "where": [{"file": "coffee_passport_cfe_1000.pdf", "page": 1, "section": "Технические характеристики"}, {"file": "coffee_passport_cfe_1000.pdf", "page": 1, "section": "Кофеварка капельная «КофеАрт 1000»"}]},
+        {"names": ["Колба", "Материал колбы"], "values": ["термостекло", "из термостекла", "термостойкое стекло"], "where": [{"file": "coffee_passport_cfe_1000.pdf", "page": 1, "section": "Технические характеристики"}, {"file": "coffee_passport_cfe_1000.pdf", "page": 1, "section": "Кофеварка капельная «КофеАрт 1000»"}]},
+        {"names": ["Плита подогрева", "Подогрев", "Поддержание температуры"], "values": ["есть", "да"], "where": [{"file": "coffee_passport_cfe_1000.pdf", "page": 1, "section": "Технические характеристики"}, {"file": "coffee_passport_cfe_1000.pdf", "page": 1, "section": "Кофеварка капельная «КофеАрт 1000»"}]},
+        {"names": ["Таймер"], "values": ["нет"], "where": [{"file": "coffee_passport_cfe_1000.pdf", "page": 1, "section": "Технические характеристики"}]},
+        {"names": ["Питание", "Электропитание", "Напряжение", "Напряжение сети"], "values": ["220 В, 50 Гц", "220 В / 50 Гц", "220 В"], "where": [{"file": "coffee_passport_cfe_1000.pdf", "page": 1, "section": "Технические характеристики"}]},
+        {"names": ["Вес", "Масса"], "values": ["2 кг"], "where": [{"file": "coffee_passport_cfe_1000.pdf", "page": 1, "section": "Технические характеристики"}]},
+        {"names": ["Цвет"], "values": ["красный"], "where": [{"file": "coffee_passport_cfe_1000.pdf", "page": 1, "section": "Технические характеристики"}]},
+        {"names": ["Гарантия", "Гарантийный срок"], "values": ["24 месяцев", "24 месяца", "24 мес", "24 месяцев с даты продажи", "24 месяца с даты продажи"], "where": [{"file": "coffee_passport_cfe_1000.pdf", "page": 1, "section": "Технические характеристики"}, {"file": "coffee_passport_cfe_1000.pdf", "page": 2, "section": "Гарантийные обязательства"}]},
+        {"names": ["Страна-производитель", "Страна производства", "Страна происхождения", "Страна"], "values": ["Россия"], "where": [{"file": "coffee_passport_cfe_1000.pdf", "page": 1, "section": "Технические характеристики"}]},
+        {"names": ["Комплект поставки", "Комплектация", "Комплект"], "where": [{"file": "coffee_passport_cfe_1000.pdf", "page": 2, "section": "Комплект поставки"}]}
+      ],
+      "missing_fields": []
+    },
+    {
+      "id": "fan-40-offer-en",
+      "documents": ["fan_kp_2.pdf"],
+      "hint": "FAN-40",
+      "characteristics": [
+        {"names": ["Model"], "values": ["VentBriz 40"], "where": [{"file": "fan_kp_2.pdf", "page": 1, "section": "Price list (wholesale)"}]},
+        {"names": ["SKU", "Article", "Article number"], "values": ["FAN-40"], "where": [{"file": "fan_kp_2.pdf", "page": 1, "section": "Price list (wholesale)"}]},
+        {"names": ["Power", "Rated power", "Power consumption"], "values": ["40 W"], "where": [{"file": "fan_kp_2.pdf", "page": 1, "section": "Price list (wholesale)"}]},
+        {"names": ["Color", "Colour"], "values": ["black"], "where": [{"file": "fan_kp_2.pdf", "page": 1, "section": "Price list (wholesale)"}]}
+      ],
+      "missing_fields": [
+        {"names": ["Blade diameter", "Blade size", "Fan diameter"]},
+        {"names": ["Controls", "Control", "Control type"]},
+        {"names": ["Speeds", "Number of speeds", "Speed settings"]},
+        {"names": ["Oscillation", "Rotation", "Oscillation angle"]},
+        {"names": ["Sleep timer", "Timer"]},
+        {"names": ["Power supply", "Mains supply", "Voltage"]},
+        {"names": ["Weight"]},
+        {"names": ["Warranty", "Warranty period"]},
+        {"names": ["Country of origin", "Country of manufacture", "Made in"]},
+        {"names": ["Package contents", "Contents", "In the box", "Package", "Package includes", "Included"]}
+      ]
+    }
+  ]
+}

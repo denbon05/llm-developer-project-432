@@ -76,7 +76,7 @@ verify in a minute instead of writing in an hour.
 - **Generator**: the model role that writes a card draft from supplier facts
   or from sources. _Avoid_: writer.
 - **Critic**: the model role that checks a card draft against the supplier
-  facts or the sources. _Avoid_: reviewer, validator, judge.
+  facts or the sources. _Avoid_: reviewer, validator.
 - **Critique**: the critic's verdict (`pass` or `revise`) and issues, each
   naming the source or draft field it concerns. _Avoid_: review, feedback
   report.
@@ -93,6 +93,29 @@ verify in a minute instead of writing in an hour.
   validation. _Avoid_: patch, partial regeneration.
 - **Repair budget**: the maximum number of output repairs and field fixes for
   one extraction, generation or critique.
+
+### Cost and evaluation
+
+- **Call ledger**: the record of every model call with its job, purpose,
+  model, tokens, cost and duration. _Avoid_: usage log, billing table.
+- **Call purpose**: what a model call is for: extract, generate, critique or
+  judge. _Avoid_: call type, label.
+- **Main model**: the model of the roles that write: the extractor and the
+  generator. _Avoid_: strong model, primary model.
+- **Cheap model**: the model of the roles that check: the critic. _Avoid_:
+  small model, secondary model.
+- **Reference case**: documents, an optional hint, and what their card draft
+  is expected to hold: characteristics with the places that state them, and
+  missing fields. _Avoid_: test case, sample.
+- **Reference set**: the reference cases that evaluation measures card drafts
+  against. _Avoid_: ground truth, benchmark.
+- **Evaluation run**: one pass over the reference set, or over its subset,
+  ending in a report. _Avoid_: benchmark run, test run.
+- **Judge**: the model role that, in evaluation only, decides for each claim
+  of a card draft whether the sources support it. _Avoid_: grader, evaluator.
+- **Claim**: a piece of a card draft that the judge checks on its own: the
+  title, a characteristic, a benefit or a sentence of the description.
+  _Avoid_: assertion, statement.
 
 ### Jobs and decisions
 

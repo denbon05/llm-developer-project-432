@@ -72,7 +72,7 @@ async def test_database(
     yield
     conn = await asyncpg.connect(database_url)
     try:
-        await conn.execute("TRUNCATE jobs, documents, chunks")
+        await conn.execute("TRUNCATE jobs, documents, chunks, llm_calls")
     finally:
         await conn.close()
 

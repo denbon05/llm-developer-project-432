@@ -5,7 +5,7 @@ from typing import Any
 import pytest
 from pydantic import BaseModel
 
-from app.llm.client import ChatMessage, Completion
+from app.llm.client import CallParams, ChatMessage, Completion
 from app.services import structured
 
 Reply = BaseModel | dict[str, Any] | str
@@ -16,6 +16,7 @@ class ModelCall:
     """One call the substituted model received"""
 
     messages: list[ChatMessage]
+    params: CallParams
     response_schema: type[BaseModel] | None
 
 
@@ -38,10 +39,10 @@ def stub_model(
     async def complete(
         messages: list[ChatMessage],
         *,
+        params: CallParams,
         response_schema: type[BaseModel] | None = None,
-        **_: object,
     ) -> Completion:
-        calls.append(ModelCall(messages, response_schema))
+        calls.append(ModelCall(messages, params, response_schema))
         return Completion(
             text=render_reply(next(remaining)),
             model="test-model",

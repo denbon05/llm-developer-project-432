@@ -18,7 +18,7 @@ Architecture decisions live in [`docs/adr/`](../adr/). Domain vocabulary lives i
 | 05 | [Document ingestion](05-document-ingestion.md) | Upload, pdf/docx/xlsx parsing, normalisation, chunking, document status, ingestion workflow | implemented |
 | 06 | [Embeddings and search](06-embeddings-and-search.md) | Local embeddings, pgvector, vector, keyword and hybrid search, reindex, search evaluation | implemented |
 | 07 | [Grounded generation](07-grounded-generation.md) | Generation from documents, context assembly, citation verification, end-to-end flow | implemented |
-| 08 | Cost, tracing, evaluation | LLM call ledger, two-model policy, trace IDs, call labels in logs, strict output mode, quality metrics | planned |
+| 08 | [Cost, tracing, evaluation](08-cost-tracing-evaluation.md) | Call ledger, two-model policy, trace IDs, call purposes in logs, quality metrics, LLM judge | accepted |
 | 09 | Guardrails | PII masking, prompt-injection detection, output filter | planned |
 | 10 | Delivery | Clean-slate run, README, metrics report (no separate spec) | planned |
 

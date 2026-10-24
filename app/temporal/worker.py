@@ -1,7 +1,15 @@
 import asyncio
 import signal
+from typing import Any
 
-from temporalio.worker import Worker
+from structlog.contextvars import bound_contextvars
+from temporalio import activity
+from temporalio.worker import (
+    ActivityInboundInterceptor,
+    ExecuteActivityInput,
+    Interceptor,
+    Worker,
+)
 
 from app.core import db
 from app.core.bootstrap import bootstrap
@@ -20,7 +28,7 @@ from app.temporal.activities import (
     record_job_status,
     verify_citations,
 )
-from app.temporal.client import connect_temporal_client
+from app.temporal.client import connect_temporal_client, read_job_id
 from app.temporal.workflows import (
     CardGenerationWorkflow,
     DocumentIngestionWorkflow,
@@ -29,6 +37,32 @@ from app.temporal.workflows import (
 STOP_SIGNALS = (signal.SIGINT, signal.SIGTERM)
 
 logger = get_logger(__name__)
+
+
+class JobIdActivityInterceptor(ActivityInboundInterceptor):
+    """Binds the job id to the log context of a card activity's run"""
+
+    async def execute_activity(self, input: ExecuteActivityInput) -> Any:
+        """Run the activity with its job id in every log line and ledger row"""
+        # Read from the workflow id, so no activity takes the id as an
+        # argument just to log it.
+        job_id = read_job_id(activity.info().workflow_id)
+        if job_id is None:
+            # A workflow started by hand under another id, or an activity
+            # run without a workflow: there is no job to name.
+            return await self.next.execute_activity(input)
+        with bound_contextvars(job_id=str(job_id)):
+            return await self.next.execute_activity(input)
+
+
+class JobIdInterceptor(Interceptor):
+    """Gives every activity of the worker the job id interceptor"""
+
+    def intercept_activity(
+        self, next: ActivityInboundInterceptor
+    ) -> ActivityInboundInterceptor:
+        """Return the job id interceptor in front of the next one"""
+        return JobIdActivityInterceptor(next)
 
 
 async def run_worker() -> None:
@@ -59,6 +93,7 @@ async def run_worker() -> None:
                 client,
                 task_queue=settings.temporal_task_queue,
                 workflows=[CardGenerationWorkflow],
+                interceptors=[JobIdInterceptor()],
                 activities=[
                     extract_facts,
                     generate_draft,

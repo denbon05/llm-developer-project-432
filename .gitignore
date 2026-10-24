@@ -15,6 +15,7 @@ build/
 docs/steps/
 data/bulk/
 .cache/
+logs/
 CLAUDE.local.md
 
 .ruff_cache/

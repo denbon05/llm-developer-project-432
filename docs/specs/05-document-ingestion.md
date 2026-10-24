@@ -576,16 +576,16 @@ UnreadableDocumentError: the document contains no text
 - **ING-9:** an archive whose files add up to more than 100 MiB is refused
   before anything is unpacked. Captured logs of a parse hold no chunk text.
 - **ING-10:** tests read only `tests/fixtures/documents/`: copies of the
-  files they use from `evals/datasets/`, so the evaluation set can change
-  without changing what the tests check. Database tests use testcontainers,
+  files they use from `evals/datasets/`, plus the scan, so the evaluation set
+  can change without changing what the tests check. Database tests use testcontainers,
   and no test calls a model.
 
 ## Acceptance criteria
 
 1. The automated verification above passes in CI. *(test)*
-2. `make ingest` over `evals/datasets/` ends with nine documents `indexed`,
-   and `fan_passport_fan_45_scan.pdf` `failed` with the no-text-layer reason.
-   *(manual)*
+2. `make ingest` over `evals/datasets/` ends with every document `indexed`.
+   The scan's `failed` status with the no-text-layer reason is covered by
+   ING-8. *(manual + test)*
 3. In the database, every chunk has a document, position and page, and every
    chunk of the nine indexed documents has a section. Each table-row chunk
    reads `<SKU>: <column> <value>; …` and holds one whole row. *(manual +

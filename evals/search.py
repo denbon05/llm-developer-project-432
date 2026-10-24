@@ -9,6 +9,7 @@ from typing import Literal
 from uuid import UUID
 
 from evals.dataset_files import DATASETS_DIR, find_document_files
+from evals.expected_chunks import ExpectedChunk, is_expected_chunk
 from pydantic import BaseModel, TypeAdapter
 
 from app.core import db
@@ -49,15 +50,6 @@ QUERY_COMMAND = "query"
 EVAL_COMMAND = "eval"
 
 QueryKind = Literal["characteristic", "sku", "noise"]
-
-
-class ExpectedChunk(BaseModel):
-    """A chunk that answers a reference query: its file and where it sits"""
-
-    file: str
-    page: int
-    section: str | None = None
-    sku: str | None = None
 
 
 class ReferenceQuery(BaseModel):
@@ -151,12 +143,8 @@ def is_expected(
     result: SearchResult, filenames: dict[UUID, str], query: ReferenceQuery
 ) -> bool:
     """Return whether the result is one of the chunks the query expects"""
-    return any(
-        filenames[result.document_id] == expected.file
-        and result.metadata["page"] == expected.page
-        and expected.section in (None, result.metadata["section"])
-        and expected.sku in (None, result.metadata.get("sku"))
-        for expected in query.expected
+    return is_expected_chunk(
+        filenames[result.document_id], result.metadata, query.expected
     )
 
 

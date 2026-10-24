@@ -37,7 +37,8 @@ Prerequisites:
   the model from `LLM_MODEL` loaded with a context length of at least 8,192
   tokens (in LM Studio, set it when loading the model). A document job's
   prompt holds up to 3,000 tokens of sources, and the reply up to 4,096. Only
-  card generation needs the model.
+  card generation and its evaluation need the model. `LLM_CHEAP_MODEL` and
+  `LLM_JUDGE_MODEL`, when set, need the same window.
 
 ```bash
 git clone https://github.com/denbon05/llm-developer-project-432.git
@@ -49,11 +50,14 @@ make migrate-up         # in a second terminal
 ```
 
 The first `make worker` downloads the embedding model (about 1.1 GB) into
-`.cache/models/`, and the tokenizer of `LLM_TOKENIZER` (about 30 MB) into the
-Hugging Face cache, `~/.cache/huggingface/`. The tokenizer counts the tokens
-of a document job's sources. If you change `LLM_MODEL`, set `LLM_TOKENIZER` to
-that model's Hugging Face repository too. Tests load neither model nor the
-tokenizer.
+`.cache/models/`, and the default tokenizer (about 30 MB),
+which counts a document job's source tokens
+([ADR 0006](docs/adr/0006-context-budget-tokenizer.md)), into
+`~/.cache/huggingface/`. Tests load neither.
+
+Prices per model live in `app/llm/cost.py`;
+[spec 08](docs/specs/08-cost-tracing-evaluation.md#settings) describes the
+model settings.
 
 ## Usage
 
@@ -124,6 +128,29 @@ Each characteristic of the job's `result` cites source labels, and the job's
 [Spec 07](docs/specs/07-grounded-generation.md) describes retrieval, the
 context and citation checks.
 
+### Cost and tracing
+
+```bash
+make costs              # model calls, tokens and cost by model and purpose
+make costs job=<id>     # one card's calls and its total cost
+make trace job=<id>     # one job's log lines from the API and the worker
+```
+
+Each response carries its request id in `X-Request-ID`.
+[Spec 08](docs/specs/08-cost-tracing-evaluation.md#tracing) describes the call
+ledger and the log events.
+
+### Evaluation
+
+```bash
+make eval-generation          # the subset: 3 reference cases
+make eval-generation full=1   # every case
+```
+
+It needs the API, the worker and the model server.
+[Spec 08](docs/specs/08-cost-tracing-evaluation.md#evaluation) describes the
+reference set, the metrics and the reports.
+
 ### Commands
 
 | Command | Does |
@@ -131,12 +158,15 @@ context and citation checks.
 | `make install` | create `.venv` and install locked dependencies |
 | `make infra` / `make down` | start PostgreSQL and Temporal / stop them |
 | `make migrate-up` | apply pending migrations (safe to repeat) |
-| `make api` | run the API on http://localhost:8000 with auto-reload |
-| `make worker` | run the worker that carries out jobs and document ingestion |
+| `make api` | run the API on http://localhost:8000, reloading on changes in `app/`; output also goes to `logs/api.log` |
+| `make worker` | run the worker that carries out jobs and document ingestion; output also goes to `logs/worker.log` |
 | `make ingest [dir=<path>]` | upload a directory's documents and wait for their ingestion (default `evals/datasets`; `data/bulk/` is git-ignored for a local bulk set) |
 | `make reindex` | compute the chunk vectors that are missing or from another model |
 | `make search q="<query>" [mode=vector\|keyword\|hybrid] [top_k=<n>]` | search the indexed documents and print the chunks found |
 | `make eval-search [lang=en\|ru]` | run the reference search queries and write `evals/reports/search_<lang>.md` |
+| `make eval-generation [full=1]` | evaluate card drafts on the reference subset (or every case) and write `evals/reports/generation_<subset\|full>.md` |
+| `make costs [job=<id>]` | print the call ledger's calls and cost by model and purpose, or one card's |
+| `make trace job=<id>` | print one job's log lines from the API's and the worker's latest runs |
 | `make migrate-status` / `make migrate-rollback` | list migrations / roll back the latest one |
 | `make migration name=<slug>` | create a migration file |
 | `make lint` / `make typecheck` / `make test` | run ruff / basedpyright / pytest |

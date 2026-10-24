@@ -10,7 +10,7 @@ from app.agents.prompts import (
 )
 from app.core.errors import UpstreamError
 from app.core.logging import get_logger
-from app.llm.client import ChatMessage, complete
+from app.llm.client import CallParams, ChatMessage, complete
 from app.services.json_utils import JsonReadError, read_json_object
 
 # Output repairs and field fixes together, after the first call
@@ -92,11 +92,8 @@ def log_fix_request(schema: type[BaseModel], fields: list[str]) -> None:
 async def complete_structured[ModelT: BaseModel](
     messages: list[ChatMessage],
     *,
+    params: CallParams,
     response_schema: type[ModelT],
-    temperature: float,
-    max_tokens: int,
-    timeout_s: float,
-    max_retries: int,
 ) -> ModelT:
     """Return the model's reply validated against the schema
 
@@ -112,15 +109,12 @@ async def complete_structured[ModelT: BaseModel](
     while True:
         completion = await complete(
             request,
+            params=params,
             response_schema=(
                 build_fix_schema(response_schema, fields)
                 if fields
                 else response_schema
             ),
-            temperature=temperature,
-            max_tokens=max_tokens,
-            timeout_s=timeout_s,
-            max_retries=max_retries,
         )
         try:
             reply = read_json_object(completion.text)
