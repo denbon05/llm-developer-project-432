@@ -9,7 +9,7 @@ from app.main import API_PREFIX
 from app.routers import generate as generate_router
 from app.schemas.documents import DocumentStatus
 from app.schemas.jobs import JOB_DOCUMENTS_MAX_COUNT, JobStatus
-from tests.integration.seeds import store_document
+from tests.helpers.seeds import seed_document
 
 GENERATE_URL = f"{API_PREFIX}/generate"
 JOBS_URL = f"{API_PREFIX}/jobs"
@@ -52,7 +52,7 @@ async def test_generate_creates_pending_job_and_starts_its_workflow(
     api_client: httpx.AsyncClient, started_workflows: list[WorkflowStart]
 ) -> None:
     """The answer is 202 with a pending job, whose workflow is started"""
-    document_ids = [await store_document(), await store_document()]
+    document_ids = [await seed_document(), await seed_document()]
 
     response = await api_client.post(
         GENERATE_URL, json=build_generation_request(document_ids)
@@ -71,7 +71,7 @@ async def test_generate_lists_unknown_documents_first(
 ) -> None:
     """Unknown ids answer 404, even when another document isn't indexed"""
     first_unknown, second_unknown = uuid4(), uuid4()
-    parsing_id = await store_document(DocumentStatus.PARSING)
+    parsing_id = await seed_document(DocumentStatus.PARSING)
 
     response = await api_client.post(
         GENERATE_URL,
@@ -91,9 +91,9 @@ async def test_generate_lists_documents_not_indexed(
     api_client: httpx.AsyncClient, started_workflows: list[WorkflowStart]
 ) -> None:
     """Documents not indexed answer 409, each with its status"""
-    indexed_id = await store_document()
-    parsing_id = await store_document(DocumentStatus.PARSING)
-    failed_id = await store_document(DocumentStatus.FAILED)
+    indexed_id = await seed_document()
+    parsing_id = await seed_document(DocumentStatus.PARSING)
+    failed_id = await seed_document(DocumentStatus.FAILED)
 
     response = await api_client.post(
         GENERATE_URL,
@@ -147,7 +147,7 @@ async def test_generate_replays_same_key(
     api_client: httpx.AsyncClient, started_workflows: list[WorkflowStart]
 ) -> None:
     """A repeated request with the same key returns the same job"""
-    document_ids = [await store_document()]
+    document_ids = [await seed_document()]
     body = build_generation_request(document_ids)
 
     first = await api_client.post(GENERATE_URL, json=body, headers=KEY_HEADERS)

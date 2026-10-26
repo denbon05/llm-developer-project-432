@@ -11,6 +11,7 @@ from app.schemas.jobs import (
     RejectRequest,
     SupplierTextJobRequest,
 )
+from app.services import jobs as jobs_service
 from app.temporal.client import (
     send_approval,
     send_rejection,
@@ -46,8 +47,8 @@ async def create_supplier_text_job(
 
 @router.get(JOB_PATH)
 async def get_job(job_id: UUID) -> JobView:
-    """Return the job with this id"""
-    return await jobs_repository.get_job(job_id)
+    """Return the job with this id, its sources masked"""
+    return await jobs_service.read_masked_job(job_id)
 
 
 @router.post(APPROVE_PATH, status_code=status.HTTP_202_ACCEPTED)

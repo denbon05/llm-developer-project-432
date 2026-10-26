@@ -60,6 +60,7 @@ class CallPurpose(StrEnum):
     EXTRACT = "extract"
     GENERATE = "generate"
     CRITIQUE = "critique"
+    DETECT_INJECTION = "detect_injection"
     JUDGE = "judge"
 
 
@@ -151,9 +152,10 @@ def log_retry(purpose: CallPurpose, retry_state: RetryCallState) -> None:
 def choose_model(purpose: CallPurpose) -> str:
     """Return the model that serves calls of this purpose"""
     settings = get_settings()
-    # Checking a draft against its sources is a narrower task than writing
-    # it, so the critic can run on a cheaper model.
-    if purpose == CallPurpose.CRITIQUE:
+    # Checking a draft against its sources, or a chunk for a prompt
+    # injection, is a narrower task than writing a draft, so these roles can
+    # run on a cheaper model.
+    if purpose in (CallPurpose.CRITIQUE, CallPurpose.DETECT_INJECTION):
         return settings.llm_cheap_model
     if purpose == CallPurpose.JUDGE:
         return settings.llm_judge_model

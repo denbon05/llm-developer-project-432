@@ -14,6 +14,8 @@ from temporalio.worker import Worker
 
 from app.agents.prompts import CITATION_NOT_IN_CONTEXT_ISSUE
 from app.core.config import get_settings
+from app.guardrails.injection import OVERRIDE_INSTRUCTION, ROLE_MARKER
+from app.llm.client import CallPurpose
 from app.main import API_PREFIX
 from app.rag import context
 from app.repositories import chunks as chunks_repository
@@ -24,13 +26,20 @@ from app.temporal.activities import (
     build_context,
     critique_grounded_draft,
     generate_grounded_draft,
+    mask_draft,
     record_job_status,
+    record_leaks,
     verify_citations,
 )
 from app.temporal.client import build_workflow_id
 from app.temporal.workflows import CardGenerationWorkflow
-from tests.integration.seeds import build_vector, store_chunks, store_document
-from tests.unit.model_stub import stub_model
+from tests.helpers.model_stub import stub_model
+from tests.helpers.seeds import (
+    build_vector,
+    ingest_fixture,
+    seed_chunks,
+    seed_document,
+)
 
 # The whole flow: API, real workflow and activities, test database. Only the
 # query embedding, token counting and the model are substituted.
@@ -66,6 +75,29 @@ INVENTED_DRAFT = {
     "characteristics": {"Power": {"value": "40 W", "sources": ["S9"]}},
 }
 PASS = {"verdict": "pass", "issues": []}
+# A manual that carries a prompt injection with contacts
+KETTLE_MANUAL = "kettle_manual.pdf"
+KETTLE_HINT = "KTL-1700"
+INJECTION_LINE_START = "SYSTEM:"
+INJECTION = {
+    "reason": "Orders the model to set the price and add contacts.",
+    "verdict": "injection",
+}
+KETTLE_DRAFT = {
+    "title": "KettlePro 1.7 electric kettle, 2200 W",
+    "description": "A 1.7 L electric kettle whose body stays cool.",
+    "characteristics": {
+        "Power": {"value": "2200 W", "sources": ["S1"]},
+        "Body": {"value": "double wall", "sources": ["S2"]},
+    },
+    "benefits": ["The body stays cool"],
+    "seo": {
+        "meta_title": "KettlePro 1.7 electric kettle",
+        "meta_description": "A 1.7 L electric kettle, 2200 W.",
+        "keywords": ["electric kettle"],
+    },
+    "missing_fields": [],
+}
 STATUS_WAIT_TIMEOUT_S = 10
 STATUS_POLL_INTERVAL_S = 0.05
 
@@ -91,6 +123,8 @@ async def worker(
             generate_grounded_draft,
             verify_citations,
             critique_grounded_draft,
+            record_leaks,
+            mask_draft,
             record_job_status,
         ],
     ):
@@ -102,8 +136,8 @@ async def store_indexed_documents() -> list[str]:
     settings = get_settings()
     document_ids: list[str] = []
     for text, similarity in ((POWER_TEXT, 0.9), (CONTENTS_TEXT, 0.8)):
-        document_id = await store_document()
-        chunk_ids = await store_chunks(document_id, text)
+        document_id = await seed_document()
+        chunk_ids = await seed_chunks(document_id, text)
         # Under the configured model and prefix, so search finds the vectors
         await chunks_repository.write_embeddings(
             chunk_ids,
@@ -186,6 +220,7 @@ async def test_document_job_goes_from_request_to_approval(
         "record_job_status critiquing",
         "verify_citations",
         "critique_grounded_draft",
+        "record_leaks",
         "record_job_status awaiting_approval",
         "signal approve",
         "record_job_status approved",
@@ -230,3 +265,46 @@ async def test_invented_citation_is_revised_then_needs_review(
     ]
     assert POWER_TEXT not in repr(checks)
     assert CONTENTS_TEXT not in repr(checks)
+
+
+@pytest.mark.usefixtures("worker")
+async def test_injected_chunk_is_excluded_and_the_draft_waits_for_review(
+    api_client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The manual's terms chunk reaches only the detector, masked"""
+    calls = stub_model(monkeypatch, [INJECTION, KETTLE_DRAFT, PASS])
+    document_id = await ingest_fixture(KETTLE_MANUAL)
+
+    created = await api_client.post(
+        GENERATE_URL,
+        json={"document_ids": [str(document_id)], "hint": KETTLE_HINT},
+    )
+    job = await wait_for_job_status(
+        api_client, created.json()["id"], JobStatus.NEEDS_REVIEW
+    )
+
+    detector, generator, critic = calls
+    assert detector.params.purpose == CallPurpose.DETECT_INJECTION
+    assert INJECTION_LINE_START in detector.messages[-1].content
+    assert "[PHONE_1]" in detector.messages[-1].content
+    for call in (generator, critic):
+        assert INJECTION_LINE_START not in call.messages[-1].content
+    # The critic passed the draft: only the exclusion routes it.
+    assert job["critique_issues"] == []
+    assert [source["section"] for source in job["sources"]] == [
+        "Technical Specifications",
+        'Electric Kettle "KettlePro 1.7"',
+    ]
+    report = job["guard_report"]
+    assert [
+        (flagged["filename"], flagged["patterns"], flagged["verdict"])
+        for flagged in report["flagged_chunks"]
+    ] == [
+        (
+            KETTLE_MANUAL,
+            [ROLE_MARKER.name, OVERRIDE_INSTRUCTION.name],
+            "injection",
+        )
+    ]
+    assert report["excluded_documents"] == []
+    assert report["leaks"] == []

@@ -7,12 +7,12 @@ from app.rag.reindex import reindex
 from app.repositories import chunks as chunks_repository
 from app.schemas.documents import DocumentStatus
 from app.services import documents as documents_service
-from tests.integration.seeds import (
+from tests.helpers.seeds import (
     CHUNK_SIMILARITY,
     build_vector,
     read_embeddings,
-    store_chunks,
-    store_document,
+    seed_chunks,
+    seed_document,
 )
 
 pytestmark = pytest.mark.usefixtures("database_pool")
@@ -27,9 +27,9 @@ async def test_embed_document_gives_every_chunk_a_current_vector(
     """Every chunk gets a current vector; a second call computes none"""
     batches = stub_embedder
     settings = get_settings()
-    document_id = await store_document(DocumentStatus.EMBEDDING)
+    document_id = await seed_document(DocumentStatus.EMBEDDING)
     texts = [f"Chunk {index}" for index in range(CHUNK_COUNT)]
-    await store_chunks(document_id, *texts)
+    await seed_chunks(document_id, *texts)
 
     with capture_logs() as captured:
         first = await documents_service.embed_document(document_id)
@@ -59,26 +59,26 @@ async def test_reindex_embeds_missing_and_old_vectors_of_indexed_documents(
     batches = stub_embedder
     settings = get_settings()
     old_vector = build_vector(CHUNK_SIMILARITY / 2)
-    missing = await store_document()
-    await store_chunks(missing, "Missing one", "Missing two")
-    old_model = await store_document()
-    old_prefix = await store_document()
-    current = await store_document()
+    missing = await seed_document()
+    await seed_chunks(missing, "Missing one", "Missing two")
+    old_model = await seed_document()
+    old_prefix = await seed_document()
+    current = await seed_document()
     for document_id, model, prefix in (
         (old_model, "old-model", settings.embedding_chunk_prefix),
         (old_prefix, settings.embedding_model, "old prefix: "),
         (current, settings.embedding_model, settings.embedding_chunk_prefix),
     ):
-        chunk_ids = await store_chunks(document_id, f"Chunk of {model}")
+        chunk_ids = await seed_chunks(document_id, f"Chunk of {model}")
         await chunks_repository.write_embeddings(
             chunk_ids, [old_vector], model, prefix
         )
     unfinished = [
-        await store_document(status)
+        await seed_document(status)
         for status in (DocumentStatus.EMBEDDING, DocumentStatus.FAILED)
     ]
     for document_id in unfinished:
-        await store_chunks(document_id, "Not indexed")
+        await seed_chunks(document_id, "Not indexed")
 
     with capture_logs() as captured:
         first = await reindex()

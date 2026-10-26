@@ -3,17 +3,20 @@ from uuid import UUID
 from temporalio import activity
 
 from app.core.logging import get_logger
+from app.guardrails import leaks
 from app.repositories import documents as documents_repository
 from app.repositories import jobs as jobs_repository
 from app.schemas.cards import (
     CardDraft,
     Critique,
     GroundedCardDraft,
+    Leak,
     SupplierFacts,
 )
 from app.schemas.documents import DocumentStatusUpdate
 from app.schemas.jobs import JobStatusUpdate
 from app.services import documents as documents_service
+from app.services import jobs as jobs_service
 from app.services import pipeline as pipeline_service
 from app.services import rag_pipeline
 
@@ -49,13 +52,13 @@ async def critique_draft(facts: SupplierFacts, draft: CardDraft) -> Critique:
 @activity.defn
 async def build_context(
     job_id: UUID, document_ids: list[UUID], hint: str | None
-) -> str:
-    """Find the job's sources and store them; return the product line"""
-    product_line, chunk_ids = await rag_pipeline.retrieve_context(
-        job_id, document_ids, hint
-    )
-    await jobs_repository.store_context(job_id, chunk_ids)
-    return product_line
+) -> tuple[str, bool]:
+    """Find and check the job's sources and store them; return the product
+    line and whether the injection check excluded a chunk
+    """
+    context = await rag_pipeline.retrieve_context(job_id, document_ids, hint)
+    await jobs_repository.store_context(job_id, context.chunk_ids)
+    return context.product_line, context.has_excluded_chunks
 
 
 @activity.defn
@@ -83,6 +86,30 @@ async def critique_grounded_draft(
 ) -> Critique:
     """Return the critic's verdict on the job's draft"""
     return await rag_pipeline.critique(job_id, product_line, draft)
+
+
+@activity.defn
+async def record_leaks(
+    job_id: UUID, draft: CardDraft | GroundedCardDraft
+) -> list[Leak]:
+    """Store what the leak check finds in the job's last draft in its guard
+    report; return the leaks
+    """
+    draft_leaks = leaks.find_leaks(draft)
+    await jobs_repository.store_leaks(job_id, draft_leaks)
+    return draft_leaks
+
+
+@activity.defn
+async def mask_draft(
+    job_id: UUID, draft: CardDraft | GroundedCardDraft
+) -> CardDraft | GroundedCardDraft:
+    """Return the job's last draft with its personal data masked, numbered
+    as in the job's prompts
+    """
+    job = await jobs_repository.get_job(job_id)
+    supplier_input = await jobs_service.read_supplier_input(job)
+    return leaks.mask_draft(draft, supplier_input)
 
 
 @activity.defn

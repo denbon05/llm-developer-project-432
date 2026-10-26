@@ -5,13 +5,14 @@ from app.schemas.cards import (
     CardDraft,
     Critique,
     DraftStatus,
+    Leak,
     SeoBlock,
     SupplierFacts,
     Verdict,
 )
 from app.services import pipeline
 from app.services.pipeline import choose_draft_status
-from tests.unit.model_stub import Reply, stub_model
+from tests.helpers.model_stub import Reply, stub_model
 
 SUPPLIER_TEXT = "Immersion blender MixerPro 800. Power 800 W, 2 speeds."
 THRESHOLD = 0.7
@@ -54,23 +55,36 @@ REVISE = Critique(
     verdict="revise",
     issues=["description: turbo mode is absent from the facts"],
 )
+PHONE = "+7 926 555-14-08"
 
 
 @pytest.mark.parametrize(
-    ("verdict", "confidence", "status"),
+    ("verdict", "confidence", "has_guard_findings", "status"),
     [
-        ("pass", THRESHOLD, "awaiting_approval"),
-        ("pass", 0.9, "awaiting_approval"),
-        ("pass", 0.69, "needs_review"),
-        ("revise", 1.0, "needs_review"),
+        ("pass", THRESHOLD, False, "awaiting_approval"),
+        ("pass", 0.9, False, "awaiting_approval"),
+        ("pass", 0.69, False, "needs_review"),
+        ("revise", 1.0, False, "needs_review"),
+        ("pass", 1.0, True, "needs_review"),
     ],
-    ids=["pass at threshold", "pass above", "pass below", "revise"],
+    ids=["pass at threshold", "pass above", "pass below", "revise", "guarded"],
 )
 def test_choose_draft_status(
-    verdict: Verdict, confidence: float, status: DraftStatus
+    verdict: Verdict,
+    confidence: float,
+    has_guard_findings: bool,
+    status: DraftStatus,
 ) -> None:
-    """Only a passed draft at or above the threshold awaits approval"""
-    assert choose_draft_status(verdict, confidence, THRESHOLD) == status
+    """Only a passed, unguarded draft at the threshold awaits approval"""
+    assert (
+        choose_draft_status(
+            verdict=verdict,
+            confidence=confidence,
+            threshold=THRESHOLD,
+            has_guard_findings=has_guard_findings,
+        )
+        == status
+    )
 
 
 async def test_run_pipeline_passes_first_time(
@@ -145,3 +159,43 @@ async def test_run_pipeline_routes_sparse_draft_by_the_threshold(
     assert preview.verdict == "pass"
     assert preview.card.missing_fields == SPARSE_FACTS.missing_fields
     assert preview.status == status
+
+
+async def test_run_pipeline_masks_the_supplier_text_before_the_extractor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The extractor sees a placeholder; the preview counts what was masked"""
+    calls = stub_model(monkeypatch, [FACTS, DRAFT, PASS])
+
+    preview = await pipeline.run_pipeline(f"{SUPPLIER_TEXT} Call {PHONE}.")
+
+    extractor_prompt = calls[0].messages[-1].content
+    assert PHONE not in extractor_prompt
+    assert "Call [PHONE_1]." in extractor_prompt
+    assert preview.guard_report.masked_counts == {
+        "phone": 1,
+        "email": 0,
+        "tax_id": 0,
+        "card_number": 0,
+    }
+    assert preview.guard_report.leaks == []
+    assert preview.status == "awaiting_approval"
+
+
+async def test_run_pipeline_masks_a_leak_and_waits_for_review(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A phone the generator writes is masked, reported and routed"""
+    leaking_draft = DRAFT.model_copy(
+        update={"description": f"{DRAFT.description} Order at {PHONE}."}
+    )
+    stub_model(monkeypatch, [FACTS, leaking_draft, PASS])
+
+    preview = await pipeline.run_pipeline(SUPPLIER_TEXT)
+
+    assert preview.card.description.endswith("Order at [PHONE_1].")
+    assert preview.guard_report.leaks == [
+        Leak(field="description", kind="phone")
+    ]
+    assert preview.verdict == "pass"
+    assert preview.status == "needs_review"

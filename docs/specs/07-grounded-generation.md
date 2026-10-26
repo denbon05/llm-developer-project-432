@@ -480,8 +480,9 @@ the draft. Its checklist:
 ### Logs
 
 - `context_assembled` (info): `job_id`, `documents`, `candidates`, `sources`,
-  `tokens`, `duplicates_dropped`, `other_sku_rows_dropped`,
-  `cut_by_limit`, `chunk_ids`.
+  `tokens`, `dropped_duplicate_chunk_count`,
+  `dropped_mismatched_sku_chunk_count`, `over_limit_chunk_count`, `chunk_ids`
+  (renamed in [09](09-guardrails.md#logs)).
 - `citations_invalid` (warning): `job_id`, `citations`: a list of
   `{"characteristic", "label", "reason"}`, where `reason` is `not_in_context`
   or `chunk_missing`.
@@ -563,7 +564,7 @@ Each behaviour is tested once, at the cheapest level that shows it.
 - **GND-5, GND-7, GND-8, GND-9:** two end-to-end tests. Each one:
   - goes from the API through Temporal's time-skipping environment with the
     real activities to a testcontainers database;
-  - starts from documents and chunks stored by `tests/integration/seeds.py`,
+  - starts from documents and chunks stored by `tests/helpers/seeds.py`,
     with hand-made vectors;
   - substitutes the query embedding, token counting and the LLM client, which
     answers from a script.

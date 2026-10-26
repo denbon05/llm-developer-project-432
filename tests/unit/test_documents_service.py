@@ -27,6 +27,7 @@ from app.services.documents import (
     read_chunks,
 )
 from tests.fixtures import DOCUMENTS_DIR
+from tests.helpers.documents import read_document
 
 MAX_SIZE_BYTES = 10 * BYTES_PER_MIB
 PDF_CONTENT = b"%PDF-1.7 passport"
@@ -179,7 +180,7 @@ def stub_stored_document(
     async def get_document_content(
         document_id: UUID,
     ) -> tuple[DocumentFormat, bytes]:
-        return DocumentFormat(path.suffix.removeprefix(".")), path.read_bytes()
+        return read_document(path)
 
     async def replace_chunks(document_id: UUID, chunks: list[Chunk]) -> None:
         stored.append(chunks)

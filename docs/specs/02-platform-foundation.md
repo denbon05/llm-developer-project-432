@@ -34,12 +34,12 @@ app/
 ├── main.py
 ├── core/          config.py, db.py, logging.py, bootstrap.py, errors.py
 ├── routers/       health.py, cards.py, jobs.py, documents.py, generate.py, workflows.py
-├── services/      pipeline.py, structured.py, documents.py, rag_pipeline.py, json_utils.py
+├── services/      pipeline.py, structured.py, documents.py, rag_pipeline.py, jobs.py, json_utils.py
 ├── agents/        prompts.py
 ├── llm/           client.py, cost.py
 ├── rag/           embedder.py, retrieval.py, context.py, reindex.py
 ├── parsers/       pdf.py, docx.py, xlsx.py, blocks.py, normalizer.py, chunker.py
-├── guardrails/    pii.py, injection.py
+├── guardrails/    pii.py, injection.py, leaks.py
 ├── repositories/  jobs.py, documents.py, chunks.py, llm_calls.py
 ├── schemas/       cards.py, jobs.py, documents.py
 └── temporal/      workflows.py, activities.py, client.py, worker.py

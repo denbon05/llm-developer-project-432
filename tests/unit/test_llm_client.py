@@ -257,13 +257,14 @@ async def test_model_without_a_price_has_unknown_cost(
         (CallPurpose.EXTRACT, MAIN_MODEL),
         (CallPurpose.GENERATE, MAIN_MODEL),
         (CallPurpose.CRITIQUE, CHEAP_MODEL),
+        (CallPurpose.DETECT_INJECTION, CHEAP_MODEL),
         (CallPurpose.JUDGE, JUDGE_MODEL),
     ],
 )
 async def test_each_purpose_calls_its_model(
     monkeypatch: pytest.MonkeyPatch, purpose: CallPurpose, model: str
 ) -> None:
-    """The critic gets the cheap model, the judge the judge model"""
+    """The critic and the injection detector get the cheap model"""
     requests, _ = stub_model_server(
         monkeypatch, [httpx2.Response(200, json=COMPLETION_BODY)]
     )

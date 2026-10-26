@@ -1,9 +1,12 @@
 import unicodedata
+from enum import StrEnum
 from typing import Annotated, Literal, Self
+from uuid import UUID
 
 from pydantic import (
     AfterValidator,
     BaseModel,
+    ConfigDict,
     Field,
     computed_field,
     model_validator,
@@ -303,6 +306,56 @@ class Critique(BaseModel):
         return self
 
 
+class InjectionVerdict(StrEnum):
+    """What the injection check decided about a flagged chunk"""
+
+    INJECTION = "injection"
+    CLEAN = "clean"
+    UNVERIFIED = "unverified"
+
+
+class FlaggedChunk(BaseModel):
+    """A chunk with injection patterns, and the injection detector's verdict"""
+
+    chunk_id: UUID
+    document_id: UUID
+    filename: str
+    page: int
+    patterns: list[str]
+    verdict: InjectionVerdict
+    # None when the verdict is unverified
+    reason: str | None
+
+
+class ExcludedDocument(BaseModel):
+    """A document whose chunks are all kept out of a job's context"""
+
+    document_id: UUID
+    filename: str
+    excluded_chunk_count: int
+
+
+# Frozen, so a finding is hashable and a repeated one can be dropped.
+class Leak(BaseModel):
+    """A finding of the leak check: a card draft field and what it holds"""
+
+    model_config = ConfigDict(frozen=True)
+
+    field: str
+    # A personal data category, "placeholder", or an injection pattern
+    kind: str
+
+
+class GuardReport(BaseModel):
+    """What masking, the injection check and the leak check did for a job"""
+
+    # Distinct values masked in the prompts, by personal data category
+    masked_counts: dict[str, int] = Field(default_factory=dict)
+    flagged_chunks: list[FlaggedChunk] = Field(default_factory=list)
+    excluded_documents: list[ExcludedDocument] = Field(default_factory=list)
+    leaks: list[Leak] = Field(default_factory=list)
+
+
 class CardPreview(BaseModel):
     """A card draft with its generation rounds, last verdict and status"""
 
@@ -310,6 +363,7 @@ class CardPreview(BaseModel):
     attempts: int
     verdict: Verdict
     status: DraftStatus
+    guard_report: GuardReport
 
 
 class CardRequest(BaseModel):

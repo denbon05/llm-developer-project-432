@@ -7,7 +7,12 @@ import asyncpg
 
 from app.core import db
 from app.core.errors import ConflictError, InvalidRequestError, NotFoundError
-from app.schemas.cards import SOURCE_LABEL_PREFIX
+from app.schemas.cards import (
+    SOURCE_LABEL_PREFIX,
+    ExcludedDocument,
+    FlaggedChunk,
+    Leak,
+)
 from app.schemas.jobs import (
     ALLOWED_TRANSITIONS,
     DECISION_STATUSES,
@@ -87,6 +92,7 @@ def to_job(row: asyncpg.Record) -> JobView:
         error=row["error"],
         decision_reason=row["decision_reason"],
         sources=row["sources"],
+        guard_report=row["guard_report"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
@@ -210,3 +216,64 @@ async def get_context_chunk_ids(job_id: UUID) -> list[UUID]:
     if chunk_ids is None:
         raise JobNotFoundError()
     return chunk_ids
+
+
+async def get_supplier_text(job_id: UUID) -> str | None:
+    """Return the job's supplier text, or None for a document job"""
+    async with db.connection() as conn:
+        row = await conn.fetchrow(
+            "SELECT payload ->> 'supplier_text' AS supplier_text "
+            "FROM jobs WHERE id = $1",
+            job_id,
+        )
+    if row is None:
+        raise JobNotFoundError()
+    return row["supplier_text"]
+
+
+async def merge_guard_report_keys(job_id: UUID, keys: dict[str, Any]) -> None:
+    """Write these top-level keys into the job's guard report"""
+    # Each writer owns its keys, so a retry rewrites its own and leaves the
+    # others'. || replaces the top-level keys it is given.
+    async with db.connection() as conn:
+        stored_id = await conn.fetchval(
+            """
+            UPDATE jobs
+            SET guard_report =
+                    COALESCE(guard_report, '{}'::jsonb) || $2::jsonb,
+                updated_at = now()
+            WHERE id = $1
+            RETURNING id
+            """,
+            job_id,
+            keys,
+        )
+    if stored_id is None:
+        raise JobNotFoundError()
+
+
+async def store_injection_check(
+    job_id: UUID,
+    flagged_chunks: list[FlaggedChunk],
+    excluded_documents: list[ExcludedDocument],
+) -> None:
+    """Store the injection check's findings in the job's guard report"""
+    await merge_guard_report_keys(
+        job_id,
+        {
+            "flagged_chunks": [
+                chunk.model_dump(mode="json") for chunk in flagged_chunks
+            ],
+            "excluded_documents": [
+                document.model_dump(mode="json")
+                for document in excluded_documents
+            ],
+        },
+    )
+
+
+async def store_leaks(job_id: UUID, leaks: list[Leak]) -> None:
+    """Store the leak check's findings in the job's guard report"""
+    await merge_guard_report_keys(
+        job_id, {"leaks": [leak.model_dump(mode="json") for leak in leaks]}
+    )

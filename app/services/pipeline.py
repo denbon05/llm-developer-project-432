@@ -11,12 +11,15 @@ from app.agents.prompts import (
 )
 from app.core.config import get_settings
 from app.core.logging import get_logger
+from app.guardrails import leaks
+from app.guardrails.pii import mask_texts
 from app.llm.client import CallParams, CallPurpose
 from app.schemas.cards import (
     CardDraft,
     CardPreview,
     Critique,
     DraftStatus,
+    GuardReport,
     SupplierFacts,
     Verdict,
 )
@@ -28,11 +31,16 @@ logger = get_logger(__name__)
 
 
 def choose_draft_status(
-    verdict: Verdict, confidence: float, threshold: float
+    *,
+    verdict: Verdict,
+    confidence: float,
+    threshold: float,
+    has_guard_findings: bool,
 ) -> DraftStatus:
     """Return the status a finished draft waits for a decision in"""
-    # Pure, so workflow code can call it too.
-    if verdict == "pass" and confidence >= threshold:
+    # Pure, so workflow code can call it too. A draft a guard touched waits
+    # for review whatever the critic said: the human must see what happened.
+    if not has_guard_findings and verdict == "pass" and confidence >= threshold:
         return "awaiting_approval"
     return "needs_review"
 
@@ -75,8 +83,10 @@ def build_critique_params() -> CallParams:
 
 async def extract(supplier_text: str) -> SupplierFacts:
     """Return the supplier facts found in the supplier text"""
+    # Masked before the first model call, so no role sees the values.
+    [masked_text] = mask_texts([supplier_text]).texts
     return await complete_structured(
-        build_extractor_messages(supplier_text),
+        build_extractor_messages(masked_text),
         params=build_extract_params(),
         response_schema=SupplierFacts,
     )
@@ -128,16 +138,25 @@ async def run_pipeline(supplier_text: str) -> CardPreview:
         last_critique = await critique(facts, draft)
         logger.info("generation_round_finished", attempt=attempts)
     assert draft is not None  # the loop runs at least once
+    # Found first, while a phone is still a phone and not a placeholder.
+    draft_leaks = leaks.find_leaks(draft)
+    if draft_leaks:
+        draft = leaks.mask_draft(draft, [supplier_text])
     # Routing runs once, after the loop: revisions can't add missing data,
     # but the critic may still have issues worth fixing.
     status = choose_draft_status(
-        last_critique.verdict,
-        draft.confidence,
-        get_settings().card_confidence_threshold,
+        verdict=last_critique.verdict,
+        confidence=draft.confidence,
+        threshold=get_settings().card_confidence_threshold,
+        has_guard_findings=bool(draft_leaks),
     )
     return CardPreview(
         card=draft,
         attempts=attempts,
         verdict=last_critique.verdict,
         status=status,
+        guard_report=GuardReport(
+            masked_counts=mask_texts([supplier_text]).counts,
+            leaks=draft_leaks,
+        ),
     )

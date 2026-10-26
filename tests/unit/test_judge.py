@@ -14,7 +14,7 @@ from pydantic import ValidationError
 from app.agents.prompts import format_sources
 from app.schemas.cards import GroundedCardDraft
 from app.schemas.jobs import Source
-from tests.unit.model_stub import stub_model
+from tests.helpers.model_stub import stub_model
 
 DRAFT = GroundedCardDraft.model_validate(
     {

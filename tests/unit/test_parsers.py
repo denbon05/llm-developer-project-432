@@ -21,6 +21,7 @@ from app.schemas.documents import (
 )
 from app.services.documents import read_chunks
 from tests.fixtures import DOCUMENTS_DIR
+from tests.helpers.documents import read_document
 
 SCAN = "fan_passport_fan_45_scan.pdf"
 READABLE_FIXTURES = sorted(
@@ -34,9 +35,7 @@ FAN_40_ROW = (
 
 def read_fixture(name: str) -> list[Chunk]:
     """Return the chunks of a fixture document"""
-    path = DOCUMENTS_DIR / name
-    document_format = DocumentFormat(path.suffix.removeprefix("."))
-    chunks, _ = read_chunks(document_format, path.read_bytes())
+    chunks, _ = read_chunks(*read_document(DOCUMENTS_DIR / name))
     return chunks
 
 

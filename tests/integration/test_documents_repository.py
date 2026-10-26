@@ -11,7 +11,7 @@ from app.schemas.documents import (
     DocumentStatus,
     DocumentStatusUpdate,
 )
-from tests.integration.seeds import store_chunks, store_document
+from tests.helpers.seeds import seed_chunks, seed_document
 
 # Every test in this file gets the pool on the test database, and the
 # database is emptied after each test, so no rows leak between tests.
@@ -47,7 +47,7 @@ async def store_test_file() -> UUID:
     return document.id
 
 
-async def move_document(
+async def update_document_statuses(
     document_id: UUID, *statuses: DocumentStatus, error: str | None = None
 ) -> None:
     """Record each status in turn"""
@@ -110,7 +110,7 @@ async def test_concurrent_creates_with_same_bytes_make_one_document() -> None:
 async def test_update_document_status_follows_lifecycle() -> None:
     """A document moves parsing, embedding, indexed; a repeat is a no-op"""
     document_id = await store_test_file()
-    await move_document(
+    await update_document_statuses(
         document_id, DocumentStatus.PARSING, DocumentStatus.EMBEDDING
     )
     indexed = DocumentStatusUpdate(
@@ -138,7 +138,7 @@ async def test_update_document_status_records_failure(
 ) -> None:
     """Any non-terminal document can fail, and keeps the reason"""
     document_id = await store_test_file()
-    await move_document(document_id, *path)
+    await update_document_statuses(document_id, *path)
 
     failed = await documents_repository.update_document_status(
         DocumentStatusUpdate(
@@ -184,10 +184,10 @@ async def test_update_document_status_rejects_disallowed_transition(
 ) -> None:
     """A status the document cannot move to raises"""
     document_id = await store_test_file()
-    await move_document(document_id, *path)
+    await update_document_statuses(document_id, *path)
 
     with pytest.raises(documents_repository.InvalidDocumentTransitionError):
-        await move_document(document_id, target)
+        await update_document_statuses(document_id, target)
 
 
 async def test_unknown_document_is_not_found() -> None:
@@ -199,7 +199,7 @@ async def test_unknown_document_is_not_found() -> None:
     with pytest.raises(documents_repository.DocumentNotFoundError):
         await documents_repository.get_document_content(document_id)
     with pytest.raises(documents_repository.DocumentNotFoundError):
-        await move_document(document_id, DocumentStatus.PARSING)
+        await update_document_statuses(document_id, DocumentStatus.PARSING)
 
 
 async def test_replacing_chunks_twice_leaves_one_set() -> None:
@@ -219,7 +219,7 @@ async def test_replacing_chunks_twice_leaves_one_set() -> None:
 
 async def test_document_chunks_come_by_document_in_reading_order() -> None:
     """Documents in the order asked for, each one's chunks by position"""
-    first_id, second_id = await store_document(), await store_document()
+    first_id, second_id = await seed_document(), await seed_document()
     # Stored last to first, so only the position gives the reading order.
     await chunks_repository.replace_chunks(
         first_id, list(reversed(build_chunks("Alpha", "Beta")))
@@ -237,7 +237,7 @@ async def test_document_chunks_come_by_document_in_reading_order() -> None:
 
 async def test_existing_chunk_ids_leave_out_unknown_ones() -> None:
     """Only the ids of stored chunks come back"""
-    [chunk_id] = await store_chunks(await store_document(), "Alpha")
+    [chunk_id] = await seed_chunks(await seed_document(), "Alpha")
 
     existing_ids = await chunks_repository.find_existing_chunk_ids(
         [chunk_id, uuid4()]

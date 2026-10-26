@@ -24,8 +24,10 @@ from app.temporal.activities import (
     extract_facts,
     generate_draft,
     generate_grounded_draft,
+    mask_draft,
     record_document_status,
     record_job_status,
+    record_leaks,
     verify_citations,
 )
 from app.temporal.client import connect_temporal_client, read_job_id
@@ -102,6 +104,8 @@ async def run_worker() -> None:
                     generate_grounded_draft,
                     verify_citations,
                     critique_grounded_draft,
+                    record_leaks,
+                    mask_draft,
                     record_job_status,
                 ],
             ),

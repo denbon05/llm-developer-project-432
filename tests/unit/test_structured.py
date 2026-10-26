@@ -14,7 +14,7 @@ from app.services.structured import (
     InvalidModelOutputError,
     complete_structured,
 )
-from tests.unit.model_stub import stub_model
+from tests.helpers.model_stub import stub_model
 
 MESSAGES = [ChatMessage(role="user", content="Write the card draft.")]
 # The shown object must keep it unescaped, as it must keep any language.

@@ -67,3 +67,22 @@ def test_relative_cache_dir_is_resolved_against_the_repository(
     monkeypatch.setenv("EMBEDDING_CACHE_DIR", "models")
 
     assert load_settings().embedding_cache_dir == REPOSITORY_ROOT / "models"
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("LLM_DETECT_INJECTION_TIMEOUT_S", "121"),
+        ("LLM_DETECT_INJECTION_MAX_RETRIES", "3"),
+    ],
+)
+def test_detector_call_limits_are_bounded_by_the_client(
+    monkeypatch: pytest.MonkeyPatch, name: str, value: str
+) -> None:
+    """The detector's timeout and retries never exceed the client's"""
+    monkeypatch.setenv("LLM_TIMEOUT_S", "120")
+    monkeypatch.setenv("LLM_MAX_RETRIES", "2")
+    monkeypatch.setenv(name, value)
+
+    with pytest.raises(ValidationError, match="exceeds LLM_"):
+        load_settings()

@@ -128,6 +128,28 @@ Each characteristic of the job's `result` cites source labels, and the job's
 [Spec 07](docs/specs/07-grounded-generation.md) describes retrieval, the
 context and citation checks.
 
+Phone numbers, emails, tax IDs and card numbers never reach the model: they
+are replaced with placeholders such as `[PHONE_1]`, so a job's `sources` show
+the text exactly as the model saw it. Supplier text sent to `/jobs` or
+`/cards` is masked the same way. A chunk that looks like instructions to the
+model goes to the injection detector and stays out of the context unless the
+detector clears it. The job's `guard_report` says what each guard did:
+
+```text
+"guard_report": {"masked_counts": {"phone": 1, "email": 1, "tax_id": 1, "card_number": 0},
+                 "flagged_chunks": [{"filename": "kettle_manual.pdf", "page": 1,
+                                     "patterns": ["role_marker", "override_instruction"],
+                                     "verdict": "injection", "reason": "…", …}],
+                 "excluded_documents": [], "leaks": []}
+```
+
+A draft a guard touched (a chunk left out of its context, or personal data,
+a placeholder or an instruction found in the draft) waits in `needs_review`
+even if the critic passed it, so a human sees what happened before deciding.
+To see it, upload `tests/fixtures/documents/kettle_manual.pdf`: its terms
+section carries a prompt injection.
+[Spec 09](docs/specs/09-guardrails.md) describes the guards.
+
 ### Cost and tracing
 
 ```bash

@@ -3,6 +3,7 @@ from uuid import UUID
 
 import pytest
 
+from app.llm.client import CallPurpose
 from app.repositories import jobs as jobs_repository
 from app.repositories import llm_calls as llm_calls_repository
 from app.repositories.llm_calls import LlmCall, ModelCalls
@@ -86,3 +87,16 @@ async def test_costs_by_job_and_calls_by_model_and_purpose() -> None:
         ("generate", 2),
         ("judge", 1),
     ]
+
+
+@pytest.mark.usefixtures("database_pool")
+async def test_injection_detector_calls_are_recorded() -> None:
+    """The ledger accepts the detect_injection purpose"""
+    job_id = await store_job()
+
+    await llm_calls_repository.store_call(
+        build_call(job_id, CallPurpose.DETECT_INJECTION, CHEAP_MODEL, None)
+    )
+
+    [calls] = await llm_calls_repository.count_calls_by_model([job_id])
+    assert (calls.purpose, calls.calls) == (CallPurpose.DETECT_INJECTION, 1)

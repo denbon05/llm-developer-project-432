@@ -84,6 +84,8 @@ verify in a minute instead of writing in an hour.
   retry, regeneration.
 - **Revision budget**: the maximum number of generation rounds for one card
   draft.
+- **Injection detector**: the model role that decides whether a flagged chunk
+  is a prompt injection. _Avoid_: classifier, guard model.
 
 ### Invalid replies
 
@@ -98,12 +100,12 @@ verify in a minute instead of writing in an hour.
 
 - **Call ledger**: the record of every model call with its job, purpose,
   model, tokens, cost and duration. _Avoid_: usage log, billing table.
-- **Call purpose**: what a model call is for: extract, generate, critique or
-  judge. _Avoid_: call type, label.
+- **Call purpose**: what a model call is for: extract, generate, critique,
+  detect_injection or judge. _Avoid_: call type, label.
 - **Main model**: the model of the roles that write: the extractor and the
   generator. _Avoid_: strong model, primary model.
-- **Cheap model**: the model of the roles that check: the critic. _Avoid_:
-  small model, secondary model.
+- **Cheap model**: the model of the roles that check: the critic and the
+  injection detector. _Avoid_: small model, secondary model.
 - **Reference case**: documents, an optional hint, and what their card draft
   is expected to hold: characteristics with the places that state them, and
   missing fields. _Avoid_: test case, sample.
@@ -116,6 +118,33 @@ verify in a minute instead of writing in an hour.
 - **Claim**: a piece of a card draft that the judge checks on its own: the
   title, a characteristic, a benefit or a sentence of the description.
   _Avoid_: assertion, statement.
+
+### Guardrails
+
+- **Personal data**: phone numbers, emails, tax IDs and card numbers in
+  supplier input, whether a person's or a company's. _Avoid_: PII (in prose),
+  sensitive data.
+- **Masking**: replacing personal data with placeholders before any model
+  call. _Avoid_: redaction, anonymization.
+- **Placeholder**: the label that stands for one masked value within a job,
+  such as `[PHONE_1]`. _Avoid_: token, tag.
+- **Prompt injection**: text in a supplier document that tries to give the
+  model instructions. _Avoid_: jailbreak.
+- **Injection check**: checking a job's candidate chunks for prompt
+  injection, by patterns and then by the injection detector. _Avoid_:
+  screening, scanning, filtering.
+- **Injection pattern**: a named regex of text addressed to a model, such as
+  a role marker. _Avoid_: rule, signature.
+- **Flagged chunk**: a chunk in which the injection check found an injection
+  pattern. _Avoid_: suspicious chunk.
+- **Excluded chunk**: a chunk the injection check kept out of a job's
+  context. _Avoid_: dropped chunk, blocked chunk.
+- **Excluded document**: a document whose chunks are all kept out of a job's
+  context, because too many of them were excluded.
+- **Leak check**: checking a finished card draft for personal data,
+  placeholders and traces of instructions. _Avoid_: output filter, sanitizer.
+- **Guard report**: what masking, the injection check and the leak check did
+  for one job. _Avoid_: security report, audit log.
 
 ### Jobs and decisions
 
@@ -133,5 +162,5 @@ verify in a minute instead of writing in an hour.
   _Avoid_: review (as a verb for the model), verdict.
 - **Awaiting approval**: a draft the critic passed, with enough confidence,
   waiting for a decision.
-- **Needs review**: a draft that ran out of revisions or lacks confidence,
-  waiting for a decision. _Avoid_: rejected (reserved for a human rejection).
+- **Needs review**: a draft that ran out of revisions, lacks confidence, or
+  was touched by a guard, waiting for a decision. _Avoid_: rejected (reserved for a human rejection).

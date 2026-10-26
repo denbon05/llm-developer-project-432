@@ -27,14 +27,19 @@ class TokenizerNotLoadedError(RuntimeError):
     """Raised when tokens are counted before the tokenizer is loaded"""
 
 
+class DroppedChunkCounts(NamedTuple):
+    """How many chunks each filter dropped from a context's candidates"""
+
+    mismatched_sku_chunk_count: int
+    duplicate_chunk_count: int
+
+
 class AssembledContext(NamedTuple):
-    """A context's chunk ids in label order, and what assembly left out"""
+    """A context's chunk ids in label order, and what the limits left out"""
 
     chunk_ids: list[UUID]
     tokens: int
-    other_sku_rows_dropped: int
-    duplicates_dropped: int
-    cut_by_limit: int
+    over_limit_chunk_count: int
 
 
 def load_tokenizer() -> None:
@@ -110,10 +115,10 @@ def read_sku(chunk: ContextChunk) -> str | None:
     return None if sku is None else normalize_name(sku)
 
 
-def drop_other_sku_rows(
+def drop_mismatched_sku_rows(
     chunks: list[ContextChunk], hint: str | None
 ) -> list[ContextChunk]:
-    """Return the chunks without the table rows of SKUs other than the hint"""
+    """Return the chunks without the table rows whose SKU isn't the hint"""
     # Other models' rows are the likeliest source of wrong values. Applies
     # only when the hint is a row's SKU.
     if hint is None:
@@ -137,7 +142,7 @@ def drop_duplicates(chunks: list[ContextChunk]) -> list[ContextChunk]:
     return kept
 
 
-def take_within_limits(
+def fit_to_context_limits(
     chunks: list[ContextChunk],
 ) -> tuple[list[ContextChunk], int]:
     """Return the chunks taken within both limits, and their token count"""
@@ -155,22 +160,32 @@ def take_within_limits(
     return taken, tokens
 
 
-def assemble_context(
+def filter_chunks(
     candidates: list[SearchResult],
     document_chunks: list[StoredChunk],
     hint: str | None,
-) -> AssembledContext:
-    """Return the context of the search candidates, within its limits"""
+) -> tuple[list[ContextChunk], DroppedChunkCounts]:
+    """Return the search candidates in context order, without mismatched
+    SKUs' rows and duplicates, and how many chunks each filter dropped
+    """
     # document_chunks: every chunk of the documents that name the product.
+    ordered_chunks = order_chunks(candidates, document_chunks)
+    sku_filtered_chunks = drop_mismatched_sku_rows(ordered_chunks, hint)
+    deduplicated_chunks = drop_duplicates(sku_filtered_chunks)
+    return deduplicated_chunks, DroppedChunkCounts(
+        mismatched_sku_chunk_count=len(ordered_chunks)
+        - len(sku_filtered_chunks),
+        duplicate_chunk_count=len(sku_filtered_chunks)
+        - len(deduplicated_chunks),
+    )
+
+
+def assemble_context(chunks: list[ContextChunk]) -> AssembledContext:
+    """Return the context of the chunks, in their order, within its limits"""
     # The first chunk id returned becomes S1.
-    ordered = order_chunks(candidates, document_chunks)
-    without_other_skus = drop_other_sku_rows(ordered, hint)
-    unique = drop_duplicates(without_other_skus)
-    taken, tokens = take_within_limits(unique)
+    taken, tokens = fit_to_context_limits(chunks)
     return AssembledContext(
         chunk_ids=[chunk.chunk_id for chunk in taken],
         tokens=tokens,
-        other_sku_rows_dropped=len(ordered) - len(without_other_skus),
-        duplicates_dropped=len(without_other_skus) - len(unique),
-        cut_by_limit=len(unique) - len(taken),
+        over_limit_chunk_count=len(chunks) - len(taken),
     )

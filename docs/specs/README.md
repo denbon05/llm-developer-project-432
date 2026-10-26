@@ -19,7 +19,7 @@ Architecture decisions live in [`docs/adr/`](../adr/). Domain vocabulary lives i
 | 06 | [Embeddings and search](06-embeddings-and-search.md) | Local embeddings, pgvector, vector, keyword and hybrid search, reindex, search evaluation | implemented |
 | 07 | [Grounded generation](07-grounded-generation.md) | Generation from documents, context assembly, citation verification, end-to-end flow | implemented |
 | 08 | [Cost, tracing, evaluation](08-cost-tracing-evaluation.md) | Call ledger, two-model policy, trace IDs, call purposes in logs, quality metrics, LLM judge | accepted |
-| 09 | Guardrails | PII masking, prompt-injection detection, output filter | planned |
+| 09 | [Guardrails](09-guardrails.md) | Personal-data masking, injection check, leak check, guard report | accepted |
 | 10 | Delivery | Clean-slate run, README, metrics report (no separate spec) | planned |
 
 Specs 04–09 are written just before their step starts, informed by what the

@@ -9,6 +9,7 @@ from pydantic_core import PydanticCustomError
 from app.schemas.cards import (
     CardDraft,
     GroundedCardDraft,
+    GuardReport,
     SupplierText,
     check_not_blank,
 )
@@ -129,6 +130,8 @@ class JobView(BaseModel):
     decision_reason: str | None
     # By label; empty for a supplier-text job
     sources: list[Source]
+    # None until the job writes one
+    guard_report: GuardReport | None
     created_at: datetime
     updated_at: datetime
 

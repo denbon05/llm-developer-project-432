@@ -59,6 +59,10 @@ class Settings(BaseSettings):
     llm_generate_max_retries: NonNegativeInt = 2
     llm_critique_timeout_s: PositiveFloat = 45
     llm_critique_max_retries: NonNegativeInt = 1
+    llm_detect_injection_timeout_s: PositiveFloat = 30
+    llm_detect_injection_max_retries: NonNegativeInt = 1
+    # Excluded chunks at which a document is excluded from a job whole
+    injection_check_document_threshold: PositiveInt = 2
     # A draft below it waits in needs_review even when the critic passed it
     card_confidence_threshold: float = Field(default=0.7, ge=0, le=1)
     embedding_model: str = DEFAULT_EMBEDDING_MODEL
@@ -85,6 +89,7 @@ class Settings(BaseSettings):
             self.llm_extract_timeout_s,
             self.llm_generate_timeout_s,
             self.llm_critique_timeout_s,
+            self.llm_detect_injection_timeout_s,
         ):
             if timeout_s > self.llm_timeout_s:
                 raise ValueError("a stage LLM timeout exceeds LLM_TIMEOUT_S")
@@ -92,6 +97,7 @@ class Settings(BaseSettings):
             self.llm_extract_max_retries,
             self.llm_generate_max_retries,
             self.llm_critique_max_retries,
+            self.llm_detect_injection_max_retries,
         ):
             if max_retries > self.llm_max_retries:
                 raise ValueError(

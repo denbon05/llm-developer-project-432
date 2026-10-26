@@ -5,6 +5,13 @@ import pytest
 
 from app.repositories import chunks as chunks_repository
 from app.repositories import jobs as jobs_repository
+from app.schemas.cards import (
+    ExcludedDocument,
+    FlaggedChunk,
+    GuardReport,
+    InjectionVerdict,
+    Leak,
+)
 from app.schemas.documents import Chunk
 from app.schemas.jobs import (
     JobStatus,
@@ -12,7 +19,7 @@ from app.schemas.jobs import (
     Source,
     SupplierTextJobRequest,
 )
-from tests.integration.seeds import store_document
+from tests.helpers.seeds import seed_document
 
 # Every test in this file gets the pool on the test database, and the
 # database is emptied after each test, so no rows leak between tests.
@@ -114,7 +121,7 @@ async def test_retrieving_follows_pending_and_precedes_generating() -> None:
 
 async def test_job_sources_come_by_label_with_their_location() -> None:
     """Labels follow the stored order; a chunk gone keeps the others' labels"""
-    document_id = await store_document()
+    document_id = await seed_document()
     await chunks_repository.replace_chunks(
         document_id,
         [
@@ -170,3 +177,34 @@ async def test_job_sources_come_by_label_with_their_location() -> None:
             text="Power 40 W",
         ),
     ]
+
+
+async def test_guard_report_parts_are_stored_and_read_back() -> None:
+    """Each write replaces only its own parts of the report"""
+    job, _ = await jobs_repository.store_job(REQUEST, None)
+    document_id = uuid4()
+    flagged = FlaggedChunk(
+        chunk_id=uuid4(),
+        document_id=document_id,
+        filename="kettle_manual.pdf",
+        page=1,
+        patterns=["role_marker"],
+        verdict=InjectionVerdict.UNVERIFIED,
+        reason=None,
+    )
+    excluded = ExcludedDocument(
+        document_id=document_id,
+        filename="kettle_manual.pdf",
+        excluded_chunk_count=2,
+    )
+    leaks = [Leak(field="description", kind="phone")]
+
+    await jobs_repository.store_injection_check(job.id, [flagged], [excluded])
+    await jobs_repository.store_leaks(job.id, leaks)
+    # A retried check rewrites its own parts and keeps the leak check's.
+    await jobs_repository.store_injection_check(job.id, [flagged], [])
+
+    # Masked counts are never stored: they are computed on read.
+    assert (await jobs_repository.get_job(job.id)).guard_report == GuardReport(
+        flagged_chunks=[flagged], excluded_documents=[], leaks=leaks
+    )

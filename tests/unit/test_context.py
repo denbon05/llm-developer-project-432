@@ -7,9 +7,10 @@ from app.rag import context
 from app.rag.context import (
     CONTEXT_BUDGET_TOKENS,
     MAX_SOURCES,
-    AssembledContext,
+    ContextChunk,
     assemble_context,
     choose_title,
+    filter_chunks,
 )
 from app.schemas.documents import ChunkMetadata, SearchResult, StoredChunk
 
@@ -77,12 +78,9 @@ def to_stored_chunk(candidate: SearchResult) -> StoredChunk:
     )
 
 
-def list_context_texts(
-    assembled: AssembledContext, chunks: Sequence[SearchResult | StoredChunk]
-) -> list[str]:
-    """Return the texts of the assembled chunk ids, in label order"""
-    texts = {chunk.chunk_id: chunk.text for chunk in chunks}
-    return [texts[chunk_id] for chunk_id in assembled.chunk_ids]
+def list_texts(chunks: Sequence[ContextChunk]) -> list[str]:
+    """Return the chunks' texts, in their order"""
+    return [chunk.text for chunk in chunks]
 
 
 def test_documents_naming_the_product_come_first_and_whole() -> None:
@@ -105,9 +103,9 @@ def test_documents_naming_the_product_come_first_and_whole() -> None:
         contents,
     ]
 
-    assembled = assemble_context(candidates, document_chunks, HINT)
+    chunks, _ = filter_chunks(candidates, document_chunks, HINT)
 
-    assert list_context_texts(assembled, [*candidates, title, contents]) == [
+    assert list_texts(chunks) == [
         "FAN-40 power 40 W",
         "FAN-40 power",
         "Warranty 12 months",
@@ -127,11 +125,11 @@ def test_other_documents_follow_by_rank() -> None:
         build_search_result(first, "First 2"),
     ]
 
-    assembled = assemble_context(
+    chunks, _ = filter_chunks(
         candidates, [to_stored_chunk(candidates[1])], HINT
     )
 
-    assert list_context_texts(assembled, candidates) == [
+    assert list_texts(chunks) == [
         "FAN-40",
         "First 1",
         "Second 1",
@@ -164,10 +162,10 @@ def test_rows_of_other_skus_are_dropped_only_for_a_row_sku_hint(
     ]
     candidates.append(build_search_result(passport, "Passport text"))
 
-    assembled = assemble_context(candidates, [], hint)
+    chunks, dropped = filter_chunks(candidates, [], hint)
 
-    assert list_context_texts(assembled, candidates) == texts
-    assert assembled.other_sku_rows_dropped == len(candidates) - len(texts)
+    assert list_texts(chunks) == texts
+    assert dropped.mismatched_sku_chunk_count == len(candidates) - len(texts)
 
 
 def test_first_copy_of_a_duplicate_wins() -> None:
@@ -177,28 +175,31 @@ def test_first_copy_of_a_duplicate_wins() -> None:
     product = build_search_result(named, "FAN-40", is_keyword_found=True)
     named_copy = build_stored_chunk(named, "Operating rules")
 
-    assembled = assemble_context(
+    chunks, dropped = filter_chunks(
         [other_copy, product], [to_stored_chunk(product), named_copy], HINT
     )
 
-    assert assembled.chunk_ids == [product.chunk_id, named_copy.chunk_id]
-    assert assembled.duplicates_dropped == 1
+    assert [chunk.chunk_id for chunk in chunks] == [
+        product.chunk_id,
+        named_copy.chunk_id,
+    ]
+    assert dropped.duplicate_chunk_count == 1
 
 
 def test_sources_stop_at_the_count_limit() -> None:
     """Short chunks fit the budget, but at most MAX_SOURCES are taken"""
     document_id = uuid4()
-    candidates = [
+    candidates: list[ContextChunk] = [
         build_search_result(document_id, f"Row {index}")
         for index in range(MAX_SOURCES + 2)
     ]
 
-    assembled = assemble_context(candidates, [], HINT)
+    assembled = assemble_context(candidates)
 
     assert assembled.chunk_ids == [
         candidate.chunk_id for candidate in candidates[:MAX_SOURCES]
     ]
-    assert assembled.cut_by_limit == 2
+    assert assembled.over_limit_chunk_count == 2
 
 
 def test_source_over_the_budget_left_is_skipped() -> None:
@@ -214,11 +215,11 @@ def test_source_over_the_budget_left_is_skipped() -> None:
         )
     ]
 
-    assembled = assemble_context([first, too_large, fitting], [], HINT)
+    assembled = assemble_context([first, too_large, fitting])
 
     assert assembled.chunk_ids == [first.chunk_id, fitting.chunk_id]
     assert assembled.tokens == CONTEXT_BUDGET_TOKENS
-    assert assembled.cut_by_limit == 1
+    assert assembled.over_limit_chunk_count == 1
 
 
 @pytest.mark.parametrize(

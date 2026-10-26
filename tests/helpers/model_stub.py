@@ -8,7 +8,8 @@ from pydantic import BaseModel
 from app.llm.client import CallParams, ChatMessage, Completion
 from app.services import structured
 
-Reply = BaseModel | dict[str, Any] | str
+# An exception is raised instead of replying, as the client raises it.
+Reply = BaseModel | dict[str, Any] | str | Exception
 
 
 @dataclass
@@ -20,7 +21,7 @@ class ModelCall:
     response_schema: type[BaseModel] | None
 
 
-def render_reply(reply: Reply) -> str:
+def render_reply(reply: BaseModel | dict[str, Any] | str) -> str:
     """Return the reply as the text a model would send"""
     if isinstance(reply, str):
         return reply
@@ -43,8 +44,11 @@ def stub_model(
         response_schema: type[BaseModel] | None = None,
     ) -> Completion:
         calls.append(ModelCall(messages, params, response_schema))
+        reply = next(remaining)
+        if isinstance(reply, Exception):
+            raise reply
         return Completion(
-            text=render_reply(next(remaining)),
+            text=render_reply(reply),
             model="test-model",
             prompt_tokens=0,
             completion_tokens=0,

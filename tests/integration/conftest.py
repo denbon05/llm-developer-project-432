@@ -12,7 +12,7 @@ from app.core import db
 from app.core.config import get_settings
 from app.main import create_app, lifespan
 from app.rag import embedder
-from tests.integration.seeds import CHUNK_SIMILARITY, QUERY_VECTOR, build_vector
+from tests.helpers.seeds import CHUNK_SIMILARITY, QUERY_VECTOR, build_vector
 
 POSTGRES_IMAGE = "pgvector/pgvector:pg16"
 MIGRATIONS_DIR = "db/migrations"
@@ -23,7 +23,7 @@ def build_database_url(container: PostgresContainer) -> str:
     return f"{container.get_connection_url(driver=None)}?sslmode=disable"
 
 
-def migrate(database_url: str) -> None:
+def db_migrate(database_url: str) -> None:
     """Apply all migrations to the database"""
     subprocess.run(
         [
@@ -45,7 +45,7 @@ def database_url() -> Iterator[str]:
     # Without Docker this raises, so the tests fail rather than skip.
     with PostgresContainer(POSTGRES_IMAGE, driver=None) as container:
         url = build_database_url(container)
-        migrate(url)
+        db_migrate(url)
         yield url
 
 

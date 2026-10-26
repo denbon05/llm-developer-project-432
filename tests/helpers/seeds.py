@@ -1,3 +1,5 @@
+"""Test data: seeding the database and reading it back"""
+
 import math
 from uuid import UUID, uuid4
 
@@ -11,6 +13,9 @@ from app.schemas.documents import (
     DocumentStatus,
     DocumentStatusUpdate,
 )
+from app.services import documents as documents_service
+from tests.fixtures import DOCUMENTS_DIR
+from tests.helpers.documents import read_document
 
 DIMENSIONS = 768
 # The statuses a document passes through, in order, to reach each one
@@ -42,21 +47,40 @@ def build_vector(similarity: float) -> list[float]:
 QUERY_VECTOR = build_vector(1)
 
 
-async def store_document(
+async def seed_document(
     status: DocumentStatus = DocumentStatus.INDEXED,
 ) -> UUID:
     """Store a document of unique bytes, move it to the status; return its id"""
     document, _ = await documents_repository.store_uploaded_document(
         "passport.pdf", DocumentFormat.PDF, f"%PDF-1.7 {uuid4()}".encode()
     )
-    for step in PATHS[status]:
-        await documents_repository.update_document_status(
-            DocumentStatusUpdate(document_id=document.id, status=step)
-        )
+    await advance_document_to(document.id, status)
     return document.id
 
 
-async def store_chunks(
+async def advance_document_to(
+    document_id: UUID, status: DocumentStatus
+) -> None:
+    """Record every status on the way from pending to this one"""
+    for step in PATHS[status]:
+        await documents_repository.update_document_status(
+            DocumentStatusUpdate(document_id=document_id, status=step)
+        )
+
+
+async def ingest_fixture(name: str) -> UUID:
+    """Store a fixture document, chunk and embed it; return its id"""
+    # The parser is real; the embedder must be substituted.
+    document, _ = await documents_repository.store_uploaded_document(
+        name, *read_document(DOCUMENTS_DIR / name)
+    )
+    await documents_service.chunk_document(document.id)
+    await documents_service.embed_document(document.id)
+    await advance_document_to(document.id, DocumentStatus.INDEXED)
+    return document.id
+
+
+async def seed_chunks(
     document_id: UUID, *texts: str, sku: str | None = None
 ) -> list[UUID]:
     """Store text chunks on page 1, in order; return their ids"""

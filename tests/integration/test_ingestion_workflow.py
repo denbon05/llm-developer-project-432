@@ -12,7 +12,6 @@ from app.core.errors import UnreadableDocumentError
 from app.parsers.pdf import NO_TEXT_LAYER_REASON
 from app.repositories import documents as documents_repository
 from app.schemas.documents import (
-    DocumentFormat,
     DocumentStatus,
     DocumentStatusUpdate,
     DocumentWorkflowInput,
@@ -28,7 +27,8 @@ from app.temporal.workflows import (
     DocumentIngestionWorkflow,
 )
 from tests.fixtures import DOCUMENTS_DIR
-from tests.integration.seeds import read_embeddings
+from tests.helpers.documents import read_document
+from tests.helpers.seeds import read_embeddings
 
 TASK_QUEUE = "test-document-ingestion"
 STUB_CHUNK_COUNT = 5
@@ -197,9 +197,8 @@ async def test_workflow_fails_after_embed_attempts_run_out(
 
 async def store_fixture(name: str) -> UUID:
     """Store a fixture document; return its id"""
-    path = DOCUMENTS_DIR / name
     document, _ = await documents_repository.store_uploaded_document(
-        name, DocumentFormat(path.suffix.removeprefix(".")), path.read_bytes()
+        name, *read_document(DOCUMENTS_DIR / name)
     )
     return document.id
 

@@ -1,7 +1,7 @@
 import asyncio
 from collections.abc import Awaitable, Callable
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from temporalio import activity
@@ -10,7 +10,13 @@ from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
 
 from app.llm.client import LlmUnavailableError
-from app.schemas.cards import CardDraft, Critique, SeoBlock, SupplierFacts
+from app.schemas.cards import (
+    CardDraft,
+    Critique,
+    Leak,
+    SeoBlock,
+    SupplierFacts,
+)
 from app.schemas.jobs import (
     CardWorkflowInput,
     JobStatus,
@@ -59,12 +65,17 @@ def build_stub_activities(
     updates: list[JobStatusUpdate],
     generation_errors: list[Exception] | None = None,
     draft: CardDraft = DRAFT,
+    masked_draft: CardDraft | None = None,
 ) -> tuple[
     list[StubActivity],
     list[str],
     list[tuple[list[str], CardDraft | None]],
 ]:
-    """Return activities under the real names that answer from a script"""
+    """Return activities under the real names that answer from a script
+
+    With masked_draft, the leak check finds a phone and masking returns
+    masked_draft; without it, the leak check finds nothing.
+    """
     remaining = iter(critiques)
     remaining_generation_errors = iter(generation_errors or [])
     extracted_texts: list[str] = []
@@ -96,6 +107,17 @@ def build_stub_activities(
             raise critique
         return critique
 
+    @activity.defn(name="record_leaks")
+    async def record_leaks(job_id: UUID, draft: CardDraft) -> list[Leak]:
+        if masked_draft is None:
+            return []
+        return [Leak(field="description", kind="phone")]
+
+    @activity.defn(name="mask_draft")
+    async def mask_draft(job_id: UUID, draft: CardDraft) -> CardDraft:
+        assert masked_draft is not None  # called only after a leak
+        return masked_draft
+
     @activity.defn(name="record_job_status")
     async def record_job_status(update: JobStatusUpdate) -> None:
         updates.append(update)
@@ -104,6 +126,8 @@ def build_stub_activities(
         extract_facts,
         generate_draft,
         critique_draft,
+        record_leaks,
+        mask_draft,
         record_job_status,
     ]
     return activities, extracted_texts, generation_inputs
@@ -244,6 +268,27 @@ async def test_workflow_routes_passed_draft_by_input_threshold(
 
     assert updates[-2].status == status
     assert updates[-2].result == SPARSE_DRAFT
+
+
+async def test_workflow_records_the_masked_draft_of_a_leak_for_review(
+    temporal_env: WorkflowEnvironment,
+) -> None:
+    """A passed draft with a leak waits in needs_review, masked"""
+    updates: list[JobStatusUpdate] = []
+    masked_draft = DRAFT.model_copy(
+        update={"description": "Call [PHONE_1] to order."}
+    )
+    handle = await start_workflow(temporal_env)
+    await handle.signal(CardGenerationWorkflow.approve)
+
+    activities, _, _ = build_stub_activities(
+        [PASS], updates, masked_draft=masked_draft
+    )
+    async with build_worker(temporal_env, activities):
+        await handle.result()
+
+    assert updates[-2].status == JobStatus.NEEDS_REVIEW
+    assert updates[-2].result == masked_draft
 
 
 async def test_workflow_retries_generation_without_repeating_extraction(

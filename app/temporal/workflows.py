@@ -38,7 +38,10 @@ with workflow.unsafe.imports_passed_through():
         MAX_GENERATION_ATTEMPTS,
         choose_draft_status,
     )
-    from app.services.rag_pipeline import EmptyContextError
+    from app.services.rag_pipeline import (
+        ContextExcludedError,
+        EmptyContextError,
+    )
     from app.services.structured import InvalidModelOutputError
     from app.temporal.activities import (
         build_context,
@@ -49,18 +52,24 @@ with workflow.unsafe.imports_passed_through():
         extract_facts,
         generate_draft,
         generate_grounded_draft,
+        mask_draft,
         record_document_status,
         record_job_status,
+        record_leaks,
         verify_citations,
     )
 
 # Constants, not settings: replayed workflow code cannot read the environment.
 EXTRACT_START_TO_CLOSE_TIMEOUT = timedelta(minutes=3)
-RETRIEVE_START_TO_CLOSE_TIMEOUT = timedelta(minutes=2)
+# Waits for the injection detector too: ten flagged chunks at its default
+# timeout and retry.
+RETRIEVE_START_TO_CLOSE_TIMEOUT = timedelta(minutes=10)
 GENERATE_START_TO_CLOSE_TIMEOUT = timedelta(minutes=8)
 GENERATE_SCHEDULE_TO_CLOSE_TIMEOUT = timedelta(minutes=25)
 CRITIQUE_START_TO_CLOSE_TIMEOUT = timedelta(minutes=2)
 VERIFY_START_TO_CLOSE_TIMEOUT = timedelta(seconds=10)
+RECORD_LEAKS_START_TO_CLOSE_TIMEOUT = timedelta(seconds=10)
+MASK_DRAFT_START_TO_CLOSE_TIMEOUT = timedelta(seconds=10)
 CHUNK_START_TO_CLOSE_TIMEOUT = timedelta(minutes=5)
 EMBED_START_TO_CLOSE_TIMEOUT = timedelta(minutes=5)
 RECORD_STATUS_TIMEOUT = timedelta(seconds=10)
@@ -70,6 +79,8 @@ EXTRACT_MAX_ATTEMPTS = 2
 RETRIEVE_MAX_ATTEMPTS = 3
 GENERATE_MAX_ATTEMPTS = 3
 VERIFY_MAX_ATTEMPTS = 5
+RECORD_LEAKS_MAX_ATTEMPTS = 5
+MASK_DRAFT_MAX_ATTEMPTS = 5
 CRITIQUE_MAX_ATTEMPTS = 2
 CHUNK_MAX_ATTEMPTS = 3
 EMBED_MAX_ATTEMPTS = 3
@@ -79,7 +90,8 @@ RECORD_STATUS_MAX_ATTEMPTS = 5
 MAX_CITATION_VIOLATIONS = 2
 FAILED_STATUS_NOT_RECORDED = "Could not record the failed status"
 # The client already exhausted provider retries for LlmUnavailableError,
-# and an empty context stays empty on retry.
+# an empty context stays empty on retry, and the injection detector retried
+# its calls before the check excluded every chunk.
 CARD_NON_RETRYABLE_ERRORS = (
     InvalidModelOutputError,
     LlmRequestError,
@@ -87,6 +99,7 @@ CARD_NON_RETRYABLE_ERRORS = (
     InvalidJobTransitionError,
     JobNotFoundError,
     EmptyContextError,
+    ContextExcludedError,
 )
 # An unreadable file fails the same way on every attempt, and a retry finds
 # a missing document or a disallowed transition unchanged.
@@ -122,6 +135,12 @@ GENERATE_RETRY_POLICY = build_retry_policy(
 )
 VERIFY_RETRY_POLICY = build_retry_policy(
     VERIFY_MAX_ATTEMPTS, CARD_NON_RETRYABLE_ERRORS
+)
+RECORD_LEAKS_RETRY_POLICY = build_retry_policy(
+    RECORD_LEAKS_MAX_ATTEMPTS, CARD_NON_RETRYABLE_ERRORS
+)
+MASK_DRAFT_RETRY_POLICY = build_retry_policy(
+    MASK_DRAFT_MAX_ATTEMPTS, CARD_NON_RETRYABLE_ERRORS
 )
 CRITIQUE_RETRY_POLICY = build_retry_policy(
     CRITIQUE_MAX_ATTEMPTS, CARD_NON_RETRYABLE_ERRORS
@@ -164,6 +183,7 @@ class CardGenerationWorkflow:
         self.attempt = 0
         self.decision: JobStatus | None = None
         self.decision_reason: str | None = None
+        self.has_excluded_chunks = False
 
     @workflow.run
     async def run(self, job: CardWorkflowInput) -> JobStatus:
@@ -196,8 +216,26 @@ class CardGenerationWorkflow:
             draft, last_critique = await self.make_draft_from_text(
                 job.supplier_text
             )
+        # No status of its own: the job is still critiquing. Found first,
+        # while a phone is still a phone and not a placeholder.
+        draft_leaks = await workflow.execute_activity(
+            record_leaks,
+            args=[self.job_id, draft],
+            start_to_close_timeout=RECORD_LEAKS_START_TO_CLOSE_TIMEOUT,
+            retry_policy=RECORD_LEAKS_RETRY_POLICY,
+        )
+        if draft_leaks:
+            draft = await workflow.execute_activity(
+                mask_draft,
+                args=[self.job_id, draft],
+                start_to_close_timeout=MASK_DRAFT_START_TO_CLOSE_TIMEOUT,
+                retry_policy=MASK_DRAFT_RETRY_POLICY,
+            )
         status = choose_draft_status(
-            last_critique.verdict, draft.confidence, job.confidence_threshold
+            verdict=last_critique.verdict,
+            confidence=draft.confidence,
+            threshold=job.confidence_threshold,
+            has_guard_findings=self.has_excluded_chunks or bool(draft_leaks),
         )
         await self.record_status(
             JobStatus(status),
@@ -256,7 +294,10 @@ class CardGenerationWorkflow:
         await self.record_status(JobStatus.RETRIEVING)
         # Activities pass the job id, not source text: Temporal keeps activity
         # arguments in its history, and sources hold suppliers' contacts.
-        product_line = await workflow.execute_activity(
+        (
+            product_line,
+            self.has_excluded_chunks,
+        ) = await workflow.execute_activity(
             build_context,
             args=[self.job_id, document_ids, hint],
             start_to_close_timeout=RETRIEVE_START_TO_CLOSE_TIMEOUT,

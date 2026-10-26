@@ -12,11 +12,11 @@ from app.schemas.documents import (
     SearchRequest,
     SearchResult,
 )
-from tests.integration.seeds import (
+from tests.helpers.seeds import (
     QUERY_VECTOR,
     build_vector,
-    store_chunks,
-    store_document,
+    seed_chunks,
+    seed_document,
 )
 
 pytestmark = pytest.mark.usefixtures("database_pool")
@@ -41,7 +41,7 @@ async def store_embedded_chunks(
     sku: str | None = None,
 ) -> list[UUID]:
     """Store chunks with vectors this similar to the query; return their ids"""
-    chunk_ids = await store_chunks(
+    chunk_ids = await seed_chunks(
         document_id, *(text for text, _ in texts_and_similarities), sku=sku
     )
     await chunks_repository.write_embeddings(
@@ -82,7 +82,7 @@ def list_ids(results: list[SearchResult]) -> list[UUID]:
 
 async def test_vector_search_orders_by_similarity_above_threshold() -> None:
     """Nearest first; chunks below the threshold are dropped"""
-    document_id = await store_document()
+    document_id = await seed_document()
     near, nearest, far = await store_embedded_chunks(
         document_id, [("Near", 0.9), ("Nearest", 0.95), ("Far", 0.7)]
     )
@@ -99,7 +99,7 @@ async def test_vector_search_orders_by_similarity_above_threshold() -> None:
 async def test_vector_search_breaks_ties_by_chunk_id() -> None:
     """Chunks at the same distance come in chunk id order"""
     # Three chunks at one similarity: only the chunk id can order them.
-    document_id = await store_document()
+    document_id = await seed_document()
     chunk_ids = await store_embedded_chunks(
         document_id, [("Same", 0.9), ("Same again", 0.9), ("Third", 0.9)]
     )
@@ -111,7 +111,7 @@ async def test_vector_search_breaks_ties_by_chunk_id() -> None:
 
 async def test_keyword_search_needs_every_word() -> None:
     """A chunk missing one word of the query is not found"""
-    document_id = await store_document()
+    document_id = await seed_document()
     both, _ = await store_embedded_chunks(
         document_id,
         [("Blades of 27 cm, colour graphite", 0.5), ("Colour white", 0.5)],
@@ -129,7 +129,7 @@ async def test_keyword_search_needs_every_word() -> None:
 
 async def test_keyword_search_finds_the_line_with_a_code() -> None:
     """FAN-50 matches the price list that holds it, not other codes"""
-    document_id = await store_document()
+    document_id = await seed_document()
     price_list, _ = await store_embedded_chunks(
         document_id,
         [
@@ -149,7 +149,7 @@ async def test_keyword_search_breaks_ties_by_text() -> None:
     """Chunks equally ranked by words come in text order, whatever their ids"""
     # Six chunks with one matching word each: their ts_rank is equal. Random
     # ids would order them by chance; one chance in 720 to match text order.
-    document_id = await store_document()
+    document_id = await seed_document()
     texts = [f"Graphite {index}" for index in range(6)]
     await store_embedded_chunks(
         document_id, [(text, 0.5) for text in reversed(texts)]
@@ -164,7 +164,7 @@ async def test_keyword_search_breaks_ties_by_text() -> None:
 
 async def test_keyword_search_of_stop_words_finds_nothing() -> None:
     """A query of stop words only matches no chunk"""
-    document_id = await store_document()
+    document_id = await seed_document()
     await store_embedded_chunks(document_id, [("The power of the fan", 0.5)])
 
     results = await chunks_repository.search_by_keyword(
@@ -178,7 +178,7 @@ async def test_hybrid_returns_both_branches_and_ranks_found_twice_first() -> (
     None
 ):
     """Hybrid returns the union; a chunk both branches find ranks first"""
-    document_id = await store_document()
+    document_id = await seed_document()
     by_vector, by_both, by_keyword, by_neither = await store_embedded_chunks(
         document_id,
         [
@@ -213,7 +213,7 @@ async def test_hybrid_returns_both_branches_and_ranks_found_twice_first() -> (
 
 async def test_hybrid_tie_goes_to_the_keyword_found_chunk() -> None:
     """Equal fusion scores rank the chunk keyword search found first"""
-    document_id = await store_document()
+    document_id = await seed_document()
     by_vector, by_keyword = await store_embedded_chunks(
         document_id, [("Power 800 W", 0.95), ("Colour graphite", 0.5)]
     )
@@ -228,7 +228,7 @@ async def test_hybrid_tie_goes_to_the_keyword_found_chunk() -> None:
 
 async def test_hybrid_cuts_to_top_k() -> None:
     """Hybrid returns at most top_k chunks"""
-    document_id = await store_document()
+    document_id = await seed_document()
     await store_embedded_chunks(
         document_id, [(f"Graphite {index}", 0.9) for index in range(TOP_K + 2)]
     )
@@ -252,9 +252,9 @@ async def test_document_and_metadata_filters_apply(mode: SearchMode) -> None:
     """Only chunks of the given documents, or with the given metadata"""
     # One matching chunk in each of three documents. The document filter
     # must keep only the first; the metadata filter only the FAN-45 row.
-    kept_document = await store_document()
-    other_document = await store_document()
-    row_document = await store_document()
+    kept_document = await seed_document()
+    other_document = await seed_document()
+    row_document = await seed_document()
     [kept] = await store_embedded_chunks(
         kept_document, [("Graphite FAN-40", 0.9)], sku="FAN-40"
     )
@@ -284,7 +284,7 @@ async def test_documents_not_indexed_are_not_searched(
     status: DocumentStatus,
 ) -> None:
     """No mode finds chunks of a document that isn't indexed"""
-    document_id = await store_document(status)
+    document_id = await seed_document(status)
     await store_embedded_chunks(document_id, [("Colour graphite", 0.95)])
     request = SearchRequest(query="graphite")
 
@@ -304,7 +304,7 @@ async def test_old_vectors_are_left_to_keyword_search(
     """Vector search skips another model's vectors; keyword search doesn't"""
     # The stored vector was made by another model or prefix than the one
     # the search asks for, as after a model change before the reindex.
-    document_id = await store_document()
+    document_id = await seed_document()
     [chunk_id] = await store_embedded_chunks(
         document_id, [("Colour graphite", 0.95)], model=model, prefix=prefix
     )
@@ -331,7 +331,7 @@ async def test_search_uses_settings_and_logs_no_text(
     # chunk is stored under the configured model and prefix, so all three
     # modes find it through the real search service.
     settings = get_settings()
-    document_id = await store_document()
+    document_id = await seed_document()
     text = "Colour graphite"
     query = "graphite colour"
     await store_embedded_chunks(

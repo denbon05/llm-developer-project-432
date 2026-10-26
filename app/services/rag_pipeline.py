@@ -1,3 +1,5 @@
+from collections import Counter
+from typing import NamedTuple
 from uuid import UUID
 
 from app.agents.prompts import (
@@ -6,18 +8,30 @@ from app.agents.prompts import (
     build_grounded_critic_messages,
     build_grounded_generator_messages,
 )
+from app.core.config import get_settings
 from app.core.errors import ConflictError, NotFoundError, ServiceError
 from app.core.logging import get_logger
+from app.guardrails.injection import detect_injection, find_injection_patterns
+from app.guardrails.pii import mask_texts
 from app.rag import retrieval
 from app.rag.context import (
+    ContextChunk,
     assemble_context,
     choose_title,
+    filter_chunks,
     find_naming_documents,
 )
 from app.repositories import chunks as chunks_repository
 from app.repositories import documents as documents_repository
 from app.repositories import jobs as jobs_repository
-from app.schemas.cards import SOURCE_LABEL_PREFIX, Critique, GroundedCardDraft
+from app.schemas.cards import (
+    SOURCE_LABEL_PREFIX,
+    Critique,
+    ExcludedDocument,
+    FlaggedChunk,
+    GroundedCardDraft,
+    InjectionVerdict,
+)
 from app.schemas.documents import (
     DocumentStatus,
     DocumentView,
@@ -25,10 +39,8 @@ from app.schemas.documents import (
     SearchRequest,
 )
 from app.schemas.jobs import Source
-from app.services.pipeline import (
-    build_critique_params,
-    build_generate_params,
-)
+from app.services import jobs as jobs_service
+from app.services.pipeline import build_critique_params, build_generate_params
 from app.services.structured import complete_structured
 
 # Hybrid search candidates the context is assembled from
@@ -73,6 +85,33 @@ class EmptyContextError(ServiceError):
     )
 
 
+# Maps to no HTTP status: it fails a job, never a request.
+class ContextExcludedError(ServiceError):
+    """Raised when the injection check excludes every chunk of a job"""
+
+    def __init__(self, filenames: list[str]) -> None:
+        super().__init__(
+            "the injection check excluded every chunk of the documents "
+            f"{LIST_SEPARATOR.join(filenames)}; see the job's guard report"
+        )
+
+
+class InjectionCheck(NamedTuple):
+    """The chunks the injection check kept, and what it found"""
+
+    chunks: list[ContextChunk]
+    flagged_chunks: list[FlaggedChunk]
+    excluded_documents: list[ExcludedDocument]
+
+
+class RetrievedContext(NamedTuple):
+    """A job's product line and the chunk ids of its sources, in label order"""
+
+    product_line: str
+    chunk_ids: list[UUID]
+    has_excluded_chunks: bool
+
+
 async def check_documents(document_ids: list[UUID]) -> None:
     """Raise unless every document exists and is indexed"""
     documents = await documents_repository.find_documents_by_id(document_ids)
@@ -100,10 +139,79 @@ async def read_title(document_id: UUID) -> str:
     return choose_title(chunks[0].metadata["section"], document.filename)
 
 
+async def check_injection(
+    chunks: list[ContextChunk], filenames: dict[UUID, str]
+) -> InjectionCheck:
+    """Return the chunks the injection check keeps, in their order"""
+    threshold = get_settings().injection_check_document_threshold
+    excluded_counts: Counter[UUID] = Counter()
+    kept_chunks: list[ContextChunk] = []
+    flagged_chunks: list[FlaggedChunk] = []
+    checked_chunk_count = 0
+
+    for chunk in chunks:
+        # One excluded chunk can be a detector mistake, several in one
+        # document rarely are, so such a document is excluded whole. Its
+        # other chunks can't change that, so they cost no detector call.
+        if excluded_counts[chunk.document_id] >= threshold:
+            continue
+        checked_chunk_count += 1
+        # Searched in what the detector receives: the masked text.
+        [text] = mask_texts([chunk.text]).texts
+        found_injection_patterns = find_injection_patterns(text)
+        if not found_injection_patterns:
+            kept_chunks.append(chunk)
+            continue
+        flagged_chunk = await detect_injection(
+            chunk, text, found_injection_patterns, filenames[chunk.document_id]
+        )
+        flagged_chunks.append(flagged_chunk)
+        if flagged_chunk.verdict == InjectionVerdict.CLEAN:
+            kept_chunks.append(chunk)
+        else:
+            excluded_counts[chunk.document_id] += 1
+
+    excluded_documents = [
+        ExcludedDocument(
+            document_id=document_id,
+            filename=filenames[document_id],
+            excluded_chunk_count=count,
+        )
+        for document_id, count in excluded_counts.items()
+        if count >= threshold
+    ]
+    excluded_ids = {document.document_id for document in excluded_documents}
+    kept_chunks = [
+        chunk for chunk in kept_chunks if chunk.document_id not in excluded_ids
+    ]
+    # Patterns and verdicts, never the detector's reasons: a reason can restate
+    # the injection, and names aren't masked.
+    logger.info(
+        "injection_check_completed",
+        checked_chunk_count=checked_chunk_count,
+        flagged_chunk_count=len(flagged_chunks),
+        excluded_chunk_count=len(chunks) - len(kept_chunks),
+        excluded_document_count=len(excluded_documents),
+        flagged_chunks=[
+            {
+                "chunk_id": str(flagged_chunk.chunk_id),
+                "patterns": flagged_chunk.patterns,
+                "verdict": flagged_chunk.verdict,
+            }
+            for flagged_chunk in flagged_chunks
+        ],
+    )
+    return InjectionCheck(kept_chunks, flagged_chunks, excluded_documents)
+
+
 async def retrieve_context(
     job_id: UUID, document_ids: list[UUID], hint: str | None
-) -> tuple[str, list[UUID]]:
-    """Return the product line and the chunk ids of the job's sources"""
+) -> RetrievedContext:
+    """Return the job's product line and sources, and whether the injection
+    check excluded a chunk
+
+    Stores the injection check's part of the job's guard report.
+    """
     # Names the product for the generator and the critic; also the query.
     product_line = hint or await read_title(document_ids[0])
     candidates = await retrieval.search(
@@ -118,11 +226,31 @@ async def retrieve_context(
     document_chunks = await chunks_repository.find_document_chunks(
         find_naming_documents(candidates)
     )
-    context = assemble_context(candidates, document_chunks, hint)
+    chunks, dropped = filter_chunks(candidates, document_chunks, hint)
     # Possible only when no chunk has a current vector and keyword search
     # finds nothing.
-    if not context.chunk_ids:
+    if not chunks:
         raise EmptyContextError()
+    documents = await documents_repository.find_documents_by_id(document_ids)
+    filenames = {
+        document_id: document.filename
+        for document_id, document in documents.items()
+    }
+    # Before the limits: the patterns cost nothing, an excluded chunk frees its
+    # place for the next one, and a document's count of excluded chunks sees
+    # all its candidates, not only those that fit.
+    check = await check_injection(chunks, filenames)
+    # Stored before the check can fail the job, so the job says why.
+    await jobs_repository.store_injection_check(
+        job_id, check.flagged_chunks, check.excluded_documents
+    )
+    if not check.chunks:
+        raise ContextExcludedError(
+            list(
+                dict.fromkeys(filenames[chunk.document_id] for chunk in chunks)
+            )
+        )
+    context = assemble_context(check.chunks)
     # Ids and counts only: neither chunk text nor the query reaches the logs.
     logger.info(
         "context_assembled",
@@ -131,21 +259,24 @@ async def retrieve_context(
         candidates=len(candidates),
         sources=len(context.chunk_ids),
         tokens=context.tokens,
-        duplicates_dropped=context.duplicates_dropped,
-        other_sku_rows_dropped=context.other_sku_rows_dropped,
-        cut_by_limit=context.cut_by_limit,
+        dropped_mismatched_sku_chunk_count=dropped.mismatched_sku_chunk_count,
+        dropped_duplicate_chunk_count=dropped.duplicate_chunk_count,
+        excluded_chunk_count=len(chunks) - len(check.chunks),
+        over_limit_chunk_count=context.over_limit_chunk_count,
         chunk_ids=[str(chunk_id) for chunk_id in context.chunk_ids],
     )
-    return product_line, context.chunk_ids
+    return RetrievedContext(
+        product_line=product_line,
+        chunk_ids=context.chunk_ids,
+        has_excluded_chunks=len(check.chunks) < len(chunks),
+    )
 
 
 async def read_sources(job_id: UUID) -> list[Source]:
-    """Return the job's sources in label order"""
+    """Return the job's sources, masked, in label order"""
     # Read in a database operation of its own, so no connection is held
     # during the model call.
-    # TODO: mask before any prompt.
-    job = await jobs_repository.get_job(job_id)
-    return job.sources
+    return (await jobs_service.read_masked_job(job_id)).sources
 
 
 async def generate(
