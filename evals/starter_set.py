@@ -36,7 +36,7 @@ def read_starter_set() -> dict[str, Any]:
                     {
                         "names": [name],
                         "values": [value],
-                        "quote": probes.get(name, {}).get("text_contains"),
+                        "cited_text": probes.get(name, {}).get("text_contains"),
                     }
                     for name, value in card["characteristics"].items()
                 ],

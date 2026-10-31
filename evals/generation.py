@@ -86,7 +86,7 @@ class ReferenceCharacteristic(BaseModel):
     # Where the value is stated, and a text the cited chunk must contain;
     # with neither, the citation is not checked.
     where: list[ExpectedChunk] = []
-    quote: str | None = None
+    cited_text: str | None = None
 
 
 class ReferenceMissingField(BaseModel):
@@ -234,16 +234,16 @@ def is_expected_source(
     place: SourcePlace, expected: ReferenceCharacteristic
 ) -> bool:
     """Return whether the source sits where the reference says the value is
-    stated, and holds the reference's quote
+    stated, and holds the reference's cited text
     """
     if expected.where and not is_expected_chunk(
         place.file, place.metadata, expected.where
     ):
         return False
-    # A quote catches a citation of the right page but the wrong chunk.
-    return expected.quote is None or normalize(expected.quote) in normalize(
-        place.text
-    )
+    # Cited text catches a citation of the right page but the wrong chunk.
+    return expected.cited_text is None or normalize(
+        expected.cited_text
+    ) in normalize(place.text)
 
 
 def describe_citation(label: str, source_places: dict[str, SourcePlace]) -> str:
@@ -293,7 +293,7 @@ def score_characteristic(
             f"Wrong value: {first_name} «{first_cited.value}», "
             f"expected «{expected.values[0]}»"
         )
-    if not expected.where and expected.quote is None:
+    if not expected.where and expected.cited_text is None:
         score.unchecked_citation_count += 1
         return
     # A citation is correct when a cited chunk sits where the reference says

@@ -21,7 +21,10 @@ TODO(acceptance): roll back once the project is accepted, in this order:
    placeholders the external tests import, and the starter set's evaluation,
    so that make eval-generation runs evals/goldens/cards.json on
    evals/datasets/ again.
-3. Run make check.
+3. Name the Russian copies explicitly, as the English ones carry _en:
+   coffee_passport_cfe_1000.pdf becomes coffee_passport_cfe_1000_ru.pdf in
+   evals/datasets/ and tests/fixtures/documents/, with every reference to
+   it (goldens, tests, specs). Then run make check.
 4. Rerun make eval-search, make eval-generation and make eval-generation
    full=1: the committed reports predate the standard missing fields, the
    source-label rule of the document generator, the kettle-1700-en case and
@@ -35,7 +38,7 @@ TODO(acceptance): roll back once the project is accepted, in this order:
    comment.
 Keep: make setup, the Seo and chunk_blocks names, the _en suffix of the
 English copies, ADR 0008, the client-facing failure messages, the standard
-missing fields, the source-label rule, and the forbidden-text and quote
+missing fields, the source-label rule, and the forbidden-text and cited-text
 checks of the evaluation.
 -->
 
