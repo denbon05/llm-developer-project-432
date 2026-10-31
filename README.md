@@ -52,8 +52,11 @@ TODO(acceptance): roll back once the project is accepted, in this order:
    comment.
 Keep: make setup, the Seo and chunk_blocks names, the _en suffix of the
 English copies, ADR 0008, the client-facing failure messages, the standard
-missing fields, the source-label rule, and the forbidden-text and cited-text
-checks of the evaluation.
+missing fields, the source-label rule, the forbidden-text and cited-text
+checks of the evaluation, and the 60-character supplier-text title, the SEO
+and missing-field defaults with blank SEO texts and the preview_card name:
+they were decided to stay and sit outside the reverted commit, which leaves
+them.
 -->
 
 
