@@ -15,9 +15,15 @@ A Hexlet learning project: https://ru.hexlet.io/programs/llm-developer
 
 <!--
 TODO(acceptance): roll back once the project is accepted, in this order:
-1. Delete data/ (the starter supplier documents, checked byte for byte).
-2. Undo every spot that `git grep "TODO(acceptance)"` finds.
-3. Delete this comment.
+1. Delete data/ (the starter supplier documents, checked byte for byte) and
+   the starter set's reports, evals/reports/generation_starter_*.md.
+2. Undo every spot that `git grep "TODO(acceptance)"` finds: the names and
+   placeholders the external tests import, and the starter set's evaluation,
+   so that make eval-generation runs evals/goldens/cards.json on
+   evals/datasets/ again.
+3. Run make check, then delete this comment.
+Keep: make setup, the Seo and chunk_blocks names, the _en suffix of the
+English copies, ADR 0008 and the client-facing failure messages.
 -->
 
 
@@ -71,6 +77,7 @@ model settings.
 ### Run
 
 ```bash
+make infra    # PostgreSQL and Temporal, first terminal
 make api      # API, second terminal; API docs at http://localhost:8000/docs
 make worker   # worker, third terminal; Temporal UI at http://localhost:8233
 curl -s localhost:8000/health/ready
@@ -164,6 +171,10 @@ make costs              # model calls, tokens and cost by model and purpose
 make costs job=<id>     # one card's calls and its total cost
 make trace job=<id>     # one job's log lines from the API and the worker
 ```
+
+The critic and the injection detector run on `LLM_CHEAP_MODEL`. It defaults
+to `LLM_MODEL`, so locally every call shows one model, and the call
+`purpose` tells the roles apart; set a smaller model to see the split.
 
 Each response carries its request id in `X-Request-ID`.
 [Spec 08](docs/specs/08-cost-tracing-evaluation.md#tracing) describes the call

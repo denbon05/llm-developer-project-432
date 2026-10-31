@@ -20,7 +20,7 @@ pytestmark = pytest.mark.usefixtures("database_pool")
 FILENAME = "passport.pdf"
 CONTENT = b"%PDF-1.7 passport"
 CONCURRENT_CREATES = 5
-ERROR = "UnreadableDocumentError: the document contains no text"
+ERROR = "the document contains no text"
 
 
 def build_chunks(*texts: str) -> list[Chunk]:

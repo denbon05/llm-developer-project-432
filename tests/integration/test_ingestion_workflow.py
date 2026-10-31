@@ -8,7 +8,7 @@ from temporalio.client import WorkflowFailureError
 from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
 
-from app.core.errors import UnreadableDocumentError
+from app.core.errors import ServiceError, UnreadableDocumentError
 from app.parsers.pdf import NO_TEXT_LAYER_REASON
 from app.repositories import documents as documents_repository
 from app.schemas.documents import (
@@ -133,7 +133,7 @@ async def test_workflow_does_not_retry_unreadable_document(
         DocumentStatus.PARSING,
         DocumentStatus.FAILED,
     ]
-    assert updates[-1].error == f"{type(error).__name__}: {error}"
+    assert updates[-1].error == str(error)
 
 
 async def test_workflow_retries_transient_chunk_error(
@@ -171,7 +171,7 @@ async def test_workflow_fails_after_chunk_attempts_run_out(
 
     assert len(chunked_ids) == CHUNK_MAX_ATTEMPTS
     assert updates[-1].status == DocumentStatus.FAILED
-    assert updates[-1].error == f"{type(error).__name__}: {error}"
+    assert updates[-1].error == ServiceError.message
 
 
 async def test_workflow_fails_after_embed_attempts_run_out(
@@ -192,7 +192,7 @@ async def test_workflow_fails_after_embed_attempts_run_out(
         DocumentStatus.EMBEDDING,
         DocumentStatus.FAILED,
     ]
-    assert updates[-1].error == f"{type(error).__name__}: {error}"
+    assert updates[-1].error == ServiceError.message
 
 
 async def store_fixture(name: str) -> UUID:
@@ -240,7 +240,5 @@ async def test_workflow_fails_stored_scan(
 
     document = await documents_repository.get_document(document_id)
     assert document.status == DocumentStatus.FAILED
-    assert document.error == (
-        f"{UnreadableDocumentError.__name__}: {NO_TEXT_LAYER_REASON}"
-    )
+    assert document.error == NO_TEXT_LAYER_REASON
     assert document.chunk_count == 0
