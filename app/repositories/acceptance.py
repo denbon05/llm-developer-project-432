@@ -36,4 +36,19 @@ def create_acceptance_schema(conn: Any) -> None:
         )
         """
     )
+    conn.execute(
+        f"""
+        CREATE TABLE IF NOT EXISTS {ACCEPTANCE_SCHEMA}.documents (
+            id text PRIMARY KEY,
+            filename text,
+            title text,
+            format text,
+            status text,
+            error text,
+            content bytea,
+            metadata jsonb NOT NULL DEFAULT '{{}}',
+            created_at timestamptz NOT NULL DEFAULT now()
+        )
+        """
+    )
     conn.execute(f"SET search_path TO {ACCEPTANCE_SCHEMA}, public")

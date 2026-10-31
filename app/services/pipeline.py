@@ -169,7 +169,7 @@ async def preview_card(
 # TODO(acceptance): the pipeline API the external acceptance tests call,
 # in their names: a passed draft is "done", one the critic still rejects
 # after the last round is "rejected", any other waits in "needs_review".
-TEST_VERDICTS = {"pass": "approve", "revise": "regenerate"}
+TEST_VERDICTS = {"pass": "approved", "revise": "rejected"}
 TEST_DONE = "done"
 TEST_REJECTED = "rejected"
 
