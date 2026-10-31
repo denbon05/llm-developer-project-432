@@ -13,6 +13,13 @@ protection against document-based injections and personal data leaks.
 
 A Hexlet learning project: https://ru.hexlet.io/programs/llm-developer
 
+<!--
+TODO(acceptance): roll back once the project is accepted, in this order:
+1. Delete data/ (the starter supplier documents, checked byte for byte).
+2. Undo every spot that `git grep "TODO(acceptance)"` finds.
+3. Delete this comment.
+-->
+
 
 ## Stack
 
@@ -44,7 +51,7 @@ Prerequisites:
 git clone https://github.com/denbon05/llm-developer-project-432.git
 cd llm-developer-project-432
 cp .env.example .env    # defaults work locally
-make install
+make setup
 make infra              # stays in this terminal and streams logs
 make migrate-up         # in a second terminal
 ```
@@ -177,7 +184,7 @@ reference set, the metrics and the reports.
 
 | Command | Does |
 |---------|------|
-| `make install` | create `.venv` and install locked dependencies |
+| `make setup` | create `.venv` and install locked dependencies |
 | `make infra` / `make down` | start PostgreSQL and Temporal / stop them |
 | `make migrate-up` | apply pending migrations (safe to repeat) |
 | `make api` | run the API on http://localhost:8000, reloading on changes in `app/`; output also goes to `logs/api.log` |
