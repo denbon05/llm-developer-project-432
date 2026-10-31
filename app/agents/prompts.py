@@ -130,6 +130,9 @@ warranty, color, package contents, country of origin)
 Use only the sources. Never add a characteristic or a claim that the \
 sources do not contain.
 Every characteristic cites the ids of the sources that state its value.
+Name each characteristic with the label its source gives it, word for word: \
+a source line "Power supply 220 V" gives the name "Power supply", not \
+"Supply voltage".
 Describe only the named product. Sources about other models are context, \
 never values.
 The card is for a retail buyer: leave out wholesale prices, order and \

@@ -23,13 +23,20 @@ TODO(acceptance): roll back once the project is accepted, in this order:
    evals/datasets/ again.
 3. Run make check.
 4. Rerun make eval-search, make eval-generation and make eval-generation
-   full=1: the committed reports predate the standard missing fields and the
-   kettle-1700-en case. kettle_manual_en.pdf joined evals/datasets/, so if
-   the search report's threshold window moved, recalibrate (ADR 0008).
-5. Delete this comment.
+   full=1: the committed reports predate the standard missing fields, the
+   source-label rule of the document generator, the kettle-1700-en case and
+   the grouped Cases table. kettle_manual_en.pdf joined evals/datasets/, so
+   if the search report's threshold window moved, recalibrate (ADR 0008).
+   Compare the full run with the committed generation_full.md (58/74
+   matched, 4/19 truly missing listed): on the starter set those two changes
+   lifted matched from 0.56 to 0.70 and truly missing listed from 1/5 to
+   5/5; if our set drops instead, look at the prompt rule first.
+5. Update evals/reports/README.md with the new numbers, then delete this
+   comment.
 Keep: make setup, the Seo and chunk_blocks names, the _en suffix of the
 English copies, ADR 0008, the client-facing failure messages, the standard
-missing fields, and the forbidden-text and quote checks of the evaluation.
+missing fields, the source-label rule, and the forbidden-text and quote
+checks of the evaluation.
 -->
 
 

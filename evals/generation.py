@@ -67,20 +67,10 @@ SECONDS_PER_MINUTE = 60
 RATIO_DIGITS = 2
 ROUNDS_DIGITS = 1
 NO_VALUE = "-"
-CASE_COLUMNS = [
-    "Case",
-    "Status",
-    "Rounds",
-    "Confidence",
-    "Matched",
-    "Citations",
-    "Supported",
-    "Missing but present",
-    "Truly missing",
-    "Forbidden found",
-    "Cost",
-    "Time",
-]
+# A case's figures grouped by what they tell, so the table stays narrow
+CASE_COLUMNS = ["Case", "Result", "Quality", "Missing fields", "Cost · time"]
+CELL_SEPARATOR = " · "
+NOTHING_EXPECTED = "none expected"
 # Normalisation, for names and values alike
 DECIMAL_COMMA = re.compile(r"(?<=\d),(?=\d)")
 SPACE_BEFORE_UNIT = re.compile(r"(?<=\d) (?=[^\W\d_])")
@@ -469,9 +459,56 @@ def format_averages(outcomes: list[CaseOutcome]) -> str:
     )
     average_time_s = statistics.mean(outcome.time_s for outcome in outcomes)
     average_rounds = statistics.mean(outcome.rounds for outcome in outcomes)
-    return (
-        f"{format_cost(average_cost)} · {format_duration(average_time_s)} · "
-        f"{average_rounds:.{ROUNDS_DIGITS}f} rounds"
+    return CELL_SEPARATOR.join(
+        [
+            format_cost(average_cost),
+            format_duration(average_time_s),
+            f"{average_rounds:.{ROUNDS_DIGITS}f} rounds",
+        ]
+    )
+
+
+def describe_result(outcome: CaseOutcome) -> str:
+    """Return how the case's job ended: status, rounds and confidence"""
+    rounds = f"{outcome.rounds} round{'' if outcome.rounds == 1 else 's'}"
+    parts = [outcome.status, rounds]
+    if outcome.confidence is not None:
+        parts.append(f"confidence {outcome.confidence}")
+    return CELL_SEPARATOR.join(parts)
+
+
+def describe_quality(score: DraftScore) -> str:
+    """Return the draft's checks as named fractions"""
+    # A check the case doesn't make is left out rather than shown as a dash.
+    parts = [
+        f"{format_fraction(score.matched_count, score.expected_count)} matched"
+    ]
+    checked_citation_count = count_checked_citations(score)
+    if checked_citation_count:
+        parts.append(
+            f"{score.correct_citation_count}/{checked_citation_count} cited"
+        )
+    if score.claim_count is not None and score.supported_count is not None:
+        parts.append(f"{score.supported_count}/{score.claim_count} supported")
+    if score.forbidden_text_count:
+        parts.append(
+            f"{score.forbidden_found_count}/{score.forbidden_text_count} "
+            "forbidden"
+        )
+    return CELL_SEPARATOR.join(parts)
+
+
+def describe_missing_fields(score: DraftScore) -> str:
+    """Return the truly missing fields the draft listed, and the fields it
+    listed as missing though the documents state them
+    """
+    listed = (
+        f"{score.truly_missing_listed_count}/{score.truly_missing_count} listed"
+        if score.truly_missing_count
+        else NOTHING_EXPECTED
+    )
+    return CELL_SEPARATOR.join(
+        [listed, f"{score.missing_but_present_count} wrongly listed"]
     )
 
 
@@ -528,35 +565,18 @@ def build_summary_table(
 
 def build_cases_table(outcomes: list[CaseOutcome]) -> list[str]:
     """Return the table with one row per case"""
-    rows: list[list[str]] = []
-    for outcome in outcomes:
-        score = outcome.score
-        supported = (
-            NO_VALUE
-            if score.claim_count is None or score.supported_count is None
-            else format_fraction(score.supported_count, score.claim_count)
-        )
-        row = [
+    rows = [
+        [
             outcome.case_id,
-            outcome.status,
-            str(outcome.rounds),
-            NO_VALUE if outcome.confidence is None else str(outcome.confidence),
-            format_fraction(score.matched_count, score.expected_count),
-            format_fraction(
-                score.correct_citation_count, count_checked_citations(score)
+            describe_result(outcome),
+            describe_quality(outcome.score),
+            describe_missing_fields(outcome.score),
+            CELL_SEPARATOR.join(
+                [format_cost(outcome.cost_usd), format_duration(outcome.time_s)]
             ),
-            supported,
-            str(score.missing_but_present_count),
-            format_fraction(
-                score.truly_missing_listed_count, score.truly_missing_count
-            ),
-            format_fraction(
-                score.forbidden_found_count, score.forbidden_text_count
-            ),
-            format_cost(outcome.cost_usd),
-            format_duration(outcome.time_s),
         ]
-        rows.append(row)
+        for outcome in outcomes
+    ]
     return format_table(CASE_COLUMNS, rows)
 
 
