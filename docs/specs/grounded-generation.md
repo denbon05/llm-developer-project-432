@@ -5,7 +5,8 @@
 A document job writes a card draft from the chunks of 1–10 indexed documents
 and an optional hint naming the product. The model sees only labelled
 sources, code verifies every citation, and the critic checks each value
-against its sources.
+against its sources. Retrieval runs before the model as a fixed stage
+([ADR 0009](../adr/0009-retrieval-as-a-fixed-stage.md)).
 
 ## Contracts
 
@@ -136,11 +137,3 @@ vanishes only if its document is chunked again, which nothing does today.
   chunk may not fit in 12.
 - **Worker restart:** completed activities don't repeat; `build_context`
   stores the same list.
-
-## Tests
-
-`tests/unit/test_context.py`, `tests/unit/test_rag_pipeline.py` (citations,
-standard fields), `tests/unit/test_prompts.py`; end to end through Temporal
-with real activities and a scripted model:
-`tests/integration/test_grounded_generation.py`,
-`tests/integration/test_generate_api.py`.

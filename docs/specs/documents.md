@@ -130,11 +130,3 @@ time, and exits 1 only if a request failed or a document didn't finish.
   same file is uploaded again.
 - **Worker lost mid-activity:** one attempt spent; chunks are all or nothing.
 - **`embed_document` fails for good:** `failed`; search ignores the document.
-
-## Tests
-
-`tests/unit/test_documents_service.py`, `tests/unit/test_parsers.py`,
-`tests/unit/test_normalizer.py`, `tests/unit/test_chunker.py`;
-`tests/integration/test_documents_api.py`,
-`tests/integration/test_documents_repository.py`,
-`tests/integration/test_ingestion_workflow.py`.

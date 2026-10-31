@@ -49,6 +49,8 @@ invalid after 2 repairs (<errors joined by "; ">)`: 502 for a preview, the
 
 ### Confidence and routing
 
+Why coverage is computed in code: [ADR 0011](../adr/0011-confidence-computed-in-code.md).
+
 - `confidence = characteristics / (characteristics + missing_fields)` on the
   validated draft, two decimals, 0 when both are empty. It is not in the
   generator's schema, a value the model sends is ignored, and drafts shown to
@@ -118,9 +120,3 @@ Repairs that run out fail the preview (502) or the job; Temporal doesn't
 retry, since the same prompt rarely helps. An empty reply is repaired like
 any other; if reasoning models turn out to spend all of `max_tokens` first,
 failing at once is the alternative.
-
-## Tests
-
-`tests/unit/test_cards_schema.py`, `tests/unit/test_json_utils.py`,
-`tests/unit/test_structured.py`, `tests/unit/test_pipeline.py`,
-`tests/unit/test_prompts.py`.

@@ -20,7 +20,8 @@ deviates from it updates the spec in the same change.
 ## Writing a spec
 
 - Sections, empty ones skipped: **Purpose** · **Contracts** · **Behaviour** ·
-  **Failures** · **Tests**.
+  **Failures**. No test file names: tests are named after the modules they
+  cover, and a rename must not touch a spec.
 - **Contracts** hold what other code, clients, operators or tests depend on:
   API and model fields, stored data, settings, log events, Temporal
   workflows, activities, signals and queries, errors that reach clients.

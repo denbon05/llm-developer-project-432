@@ -44,6 +44,9 @@ verify in a minute instead of writing in an hour.
 
 - **Hint**: optional text naming the target product, such as a SKU.
   _Avoid_: query (search builds its query from it), prompt.
+- **Product line**: what names a job's product: its hint, or else the first
+  document's title. The generator and the critic receive it, and search uses
+  it as the query.
 - **Source**: a chunk as the generator sees it, labelled `S1`, `S2`… within
   a job. _Avoid_: evidence, reference.
 - **Context**: a job's sources in label order; the **context budget** is the

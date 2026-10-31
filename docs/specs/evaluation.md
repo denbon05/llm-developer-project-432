@@ -53,8 +53,8 @@ to the git-ignored `data/bulk/`.
 
 - A characteristic's `names` are those it may carry, in the documents'
   language; `values` the acceptable ones (none: presence counts); `where` the
-  chunks stating it (file, page, a section or SKU); `quote` a text the cited
-  chunk must hold. With neither `where` nor `quote`, the citation is not
+  chunks stating it (file, page, a section or SKU); `cited_text` a text the cited
+  chunk must hold. With neither `where` nor `cited_text`, the citation is not
   checked.
 - `missing_fields` (`{"names": […]}`): fields this product type has elsewhere
   in the set that these documents lack. `forbidden_texts`: an injection's
@@ -92,8 +92,8 @@ trailing `.` dropped, a decimal comma as a point, no space before a unit.
 1. **Matched:** a reference characteristic is *absent* when no draft
    characteristic carries one of its `names`, *matched* when one has an
    acceptable value (or there are no `values`), else a *wrong value*.
-2. **Citations:** a found characteristic with `where` or `quote` is cited
-   correctly when a cited chunk sits in `where` and holds `quote`; this
+2. **Citations:** a found characteristic with `where` or `cited_text` is cited
+   correctly when a cited chunk sits in `where` and holds `cited_text`; this
    catches values from another model. Also counted: drafts with all checked
    citations correct.
 3. **Claims supported:** code numbers the claims (title, each characteristic
@@ -123,7 +123,3 @@ runs, so compare totals.
 TODO(acceptance): `make eval-generation` currently runs the starter set in
 `data/` (`data/golden_cards.json` via `evals/starter_set.py`) into
 `generation_starter_<subset|full>.md`; roll back to the reference set above.
-
-## Tests
-
-`tests/unit/test_generation_metrics.py`, `tests/unit/test_judge.py`.

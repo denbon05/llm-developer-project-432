@@ -127,10 +127,3 @@ any non-terminal status ──────────────────�
   time out too; Temporal then retries the whole activity.
 - **Preview:** a model server that stays down returns 503 `model
   unavailable`; a rejected request or output invalid after repairs, 502.
-
-## Tests
-
-`tests/unit/test_pipeline.py`, `tests/integration/test_workflow.py` (replay,
-decisions, routing, leaks, failures), `tests/integration/test_jobs_api.py`,
-`tests/integration/test_jobs_repository.py`,
-`tests/integration/test_generate_api.py`.

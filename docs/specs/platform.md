@@ -105,14 +105,14 @@ needs travels in its input.
 - **Database down in an activity:** Temporal retries it; there are no
   connection-level retries, which would multiply with Temporal's.
 
-## Tests
+## Testing
 
-- `tests/integration/test_health.py`, `tests/unit/test_settings.py`.
-- `tests/integration/conftest.py` runs a disposable pgvector container
-  migrated by dbmate (never the Compose database) and Temporal's
-  time-skipping environment; `tests/conftest.py` fails any embedding model or
-  tokenizer load; `tests/helpers/` substitutes the LLM client and seeds
-  chunks. Parser tests read `tests/fixtures/documents/`, kept apart from the
+- Database tests run against a disposable pgvector container, migrated by
+  dbmate; never the Compose database.
+- Workflow tests run in Temporal's time-skipping environment.
+- No test needs a model server: the LLM client is substituted, and loading
+  the embedding model or the tokenizer fails a test.
+- Parser tests read their own fixture documents, kept apart from the
   evaluation set.
-- CI (`.github/workflows/ci.yml`): `make setup`, `lint`, `typecheck`, `test`
-  on every push and pull request.
+- CI runs `make setup`, `lint`, `typecheck` and `test` on every push and
+  pull request.

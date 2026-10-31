@@ -123,9 +123,3 @@ ignores a later decision or can't record a failure.
   operation. If it fails, `llm_call_not_recorded` is logged and the reply is
   still returned: the model is paid for, and failing would make Temporal call
   it again. The job's cost is then understated.
-
-## Tests
-
-`tests/unit/test_llm_client.py` (retries, ledger rows, trace ids, purpose in
-logs), `tests/unit/test_cost.py`, `tests/unit/test_tracing.py` (request id,
-job id interceptor), `tests/integration/test_llm_calls_repository.py`.

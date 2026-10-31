@@ -80,7 +80,8 @@ states why before deciding. Only code sets `unverified`.
    numbers compare by digits, emails case-folded.
 3. Masking runs on every read of sources, for a prompt or the API, in
    `services/jobs.py`, so the human sees what the model saw; stored chunks
-   keep their text, and no mapping back to a value is kept. Supplier text
+   keep their text, and no mapping back to a value is kept
+   ([ADR 0010](../adr/0010-masking-on-read.md)). Supplier text
    stays as sent in the payload and Temporal history; source text never
    enters Temporal.
 
@@ -133,9 +134,3 @@ A detector fooled into `clean` lets the chunk in, masked; the data line,
 escaping, the leak check and the human remain. A repeated `build_context`
 repeats its detector calls and ledger rows; `record_leaks` and `mask_draft`
 are deterministic.
-
-## Tests
-
-`tests/unit/test_pii.py`, `test_injection.py`, `test_leaks.py`,
-`test_jobs_service.py`, `test_rag_pipeline.py`, `test_prompts.py`;
-`tests/integration/test_masking.py`, `test_grounded_generation.py`.

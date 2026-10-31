@@ -119,9 +119,3 @@ the right chunk is in the top 20 but not the top 5.
 - **Model changed, no reindex yet:** vector search skips stale chunks.
 - **No `vector` extension:** the codec is skipped; readiness returns 503.
 - **A query of stop words only:** hybrid returns the vector branch.
-
-## Tests
-
-`tests/unit/test_embedder.py`, `tests/unit/test_settings.py`,
-`tests/integration/test_embedding.py`, `tests/integration/test_search.py`
-(hand-made 768-number vectors; no test loads the model).
