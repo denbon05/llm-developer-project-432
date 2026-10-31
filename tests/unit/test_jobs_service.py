@@ -21,7 +21,7 @@ def build_source(label: str, text: str) -> Source:
         label=label,
         chunk_id=uuid4(),
         document_id=uuid4(),
-        filename="blender_kp.docx",
+        filename="blender_kp_en.docx",
         page=1,
         section=None,
         text=text,

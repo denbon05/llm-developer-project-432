@@ -14,7 +14,7 @@ from app.schemas.cards import (
     CardDraft,
     Critique,
     Leak,
-    SeoBlock,
+    Seo,
     SupplierFacts,
 )
 from app.schemas.jobs import (
@@ -40,7 +40,7 @@ DRAFT = CardDraft(
     description="An 800 W immersion blender.",
     characteristics={"Power": "800 W"},
     benefits=["Enough power for ice"],
-    seo=SeoBlock(
+    seo=Seo(
         meta_title="MixerPro 800 immersion blender",
         meta_description="An 800 W immersion blender.",
         keywords=["immersion blender"],
@@ -335,7 +335,7 @@ async def test_workflow_records_failed_when_activity_fails(
     # Before failing, the workflow records the original activity error for
     # clients that read the job from the database.
     assert updates[-1].status == JobStatus.FAILED
-    assert updates[-1].error == f"{type(error).__name__}: {error}"
+    assert updates[-1].error == str(error)
 
 
 async def test_workflow_does_not_retry_exhausted_model_retries(
@@ -357,4 +357,4 @@ async def test_workflow_does_not_retry_exhausted_model_retries(
 
     assert len(generation_inputs) == 1
     assert updates[-1].status == JobStatus.FAILED
-    assert updates[-1].error == f"{type(error).__name__}: {error}"
+    assert updates[-1].error == str(error)

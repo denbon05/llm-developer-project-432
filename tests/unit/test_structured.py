@@ -7,7 +7,11 @@ from structlog.testing import capture_logs
 
 from app.agents.prompts import FIELD_FIX_REQUEST, OUTPUT_REPAIR_REQUEST
 from app.llm.client import CallParams, CallPurpose, ChatMessage
-from app.schemas.cards import CARD_TITLE_MAX_LENGTH, CardDraft
+from app.schemas.cards import (
+    META_TITLE_MAX_LENGTH,
+    SUPPLIER_CARD_TITLE_MAX_LENGTH,
+    CardDraft,
+)
 from app.services.json_utils import EMPTY_REPLY
 from app.services.structured import (
     MAX_REPAIRS,
@@ -32,11 +36,12 @@ DRAFT: dict[str, Any] = {
     "seo": SEO,
     "missing_fields": ["Warranty"],
 }
-LONG_TITLE = "a" * (CARD_TITLE_MAX_LENGTH + 1)
+LONG_TITLE = "a" * (SUPPLIER_CARD_TITLE_MAX_LENGTH + 1)
 LONG_TITLE_DRAFT = {**DRAFT, "title": LONG_TITLE}
 SHORT_TITLE = "MixerPro 800 blender"
 TITLE_TOO_LONG = (
-    f"title: String should have at most {CARD_TITLE_MAX_LENGTH} characters"
+    f"title: String should have at most {SUPPLIER_CARD_TITLE_MAX_LENGTH} "
+    "characters"
 )
 GARBAGE = "This is a great blender."
 
@@ -187,17 +192,23 @@ async def test_unreadable_field_fix_reply_repeats_the_field_fix(
 async def test_nested_error_asks_for_its_top_level_field(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """An error inside the SEO block asks for the whole SEO block"""
-    seo_without_keywords = {**SEO}
-    del seo_without_keywords["keywords"]
+    """An error inside the SEO asks for the whole SEO"""
+    long_meta_title = "a" * (META_TITLE_MAX_LENGTH + 1)
     calls = stub_model(
-        monkeypatch, [{**DRAFT, "seo": seo_without_keywords}, {"seo": SEO}]
+        monkeypatch,
+        [
+            {**DRAFT, "seo": {**SEO, "meta_title": long_meta_title}},
+            {"seo": SEO},
+        ],
     )
 
     draft = await request_draft()
 
     assert read_schema_fields(calls[1].response_schema) == ["seo"]
-    assert "seo.keywords: Field required" in calls[1].messages[-1].content
+    assert (
+        f"seo.meta_title: String should have at most {META_TITLE_MAX_LENGTH} "
+        "characters" in calls[1].messages[-1].content
+    )
     assert draft == CardDraft.model_validate(DRAFT)
 
 

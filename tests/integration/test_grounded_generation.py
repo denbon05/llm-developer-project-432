@@ -50,7 +50,11 @@ HINT = "FAN-40"
 # Keyword search finds the hint in the first text only. By vector, the
 # first is nearer (0.9) than the second (0.8), so they become S1 and S2.
 POWER_TEXT = "FAN-40 desk fan. Power 40 W."
-CONTENTS_TEXT = "Package contents: fan, stand, manual."
+# Names the standard fields, so code lists none of them as missing
+CONTENTS_TEXT = (
+    "Package contents: fan, stand, manual. Warranty 12 months. Colour white. "
+    "Made in China."
+)
 # Without a hint, the first document's title: its first chunk has no
 # section, so its file name without the extension
 TITLE = "passport"
@@ -76,7 +80,7 @@ INVENTED_DRAFT = {
 }
 PASS = {"verdict": "pass", "issues": []}
 # A manual that carries a prompt injection with contacts
-KETTLE_MANUAL = "kettle_manual.pdf"
+KETTLE_MANUAL = "kettle_manual_en.pdf"
 KETTLE_HINT = "KTL-1700"
 INJECTION_LINE_START = "SYSTEM:"
 INJECTION = {

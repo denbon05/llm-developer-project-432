@@ -16,7 +16,6 @@ from uuid import UUID
 
 import httpx
 from evals.costs import build_ledger_table, format_cost
-from evals.dataset_files import DATASETS_DIR
 from evals.expected_chunks import ExpectedChunk, is_expected_chunk
 from evals.ingest import (
     DEFAULT_API_URL,
@@ -25,12 +24,14 @@ from evals.ingest import (
     wait_for_documents,
 )
 from evals.judge import Claim, ClaimVerdict, judge_claims, split_into_claims
+from evals.starter_set import STARTER_DIR, read_starter_set
 from evals.tables import format_table
 from pydantic import BaseModel
 
 from app.core import db
 from app.core.bootstrap import bootstrap
 from app.core.config import Settings, get_settings
+from app.guardrails.leaks import list_texts
 from app.llm.client import LlmUnavailableError
 from app.llm.cost import PRICES
 from app.main import API_PREFIX
@@ -66,19 +67,10 @@ SECONDS_PER_MINUTE = 60
 RATIO_DIGITS = 2
 ROUNDS_DIGITS = 1
 NO_VALUE = "-"
-CASE_COLUMNS = [
-    "Case",
-    "Status",
-    "Rounds",
-    "Confidence",
-    "Matched",
-    "Citations",
-    "Supported",
-    "Missing but present",
-    "Truly missing",
-    "Cost",
-    "Time",
-]
+# A case's figures grouped by what they tell, so the table stays narrow
+CASE_COLUMNS = ["Case", "Result", "Quality", "Missing fields", "Cost · time"]
+CELL_SEPARATOR = " · "
+NOTHING_EXPECTED = "none expected"
 # Normalisation, for names and values alike
 DECIMAL_COMMA = re.compile(r"(?<=\d),(?=\d)")
 SPACE_BEFORE_UNIT = re.compile(r"(?<=\d) (?=[^\W\d_])")
@@ -91,7 +83,10 @@ class ReferenceCharacteristic(BaseModel):
     names: list[str]
     # Acceptable values; with none, only the characteristic's presence counts
     values: list[str] = []
-    where: list[ExpectedChunk]
+    # Where the value is stated, and a text the cited chunk must contain;
+    # with neither, the citation is not checked.
+    where: list[ExpectedChunk] = []
+    cited_text: str | None = None
 
 
 class ReferenceMissingField(BaseModel):
@@ -108,6 +103,10 @@ class ReferenceCase(BaseModel):
     hint: str | None
     characteristics: list[ReferenceCharacteristic]
     missing_fields: list[ReferenceMissingField]
+    # Texts the draft must not contain: an injection's payload, or personal
+    # data the guards must mask. Whether the guards hold depends on the
+    # model, which tests stub.
+    forbidden_texts: list[str] = []
 
 
 class ReferenceSet(BaseModel):
@@ -115,13 +114,18 @@ class ReferenceSet(BaseModel):
 
     subset: list[str]
     cases: list[ReferenceCase]
+    # TODO(acceptance): documents whose ingestion must fail
+    rejected_documents: list[str] = []
 
 
 class SourcePlace(NamedTuple):
-    """Where a source's chunk sits: its reference file and its metadata"""
+    """Where a source's chunk sits: its reference file, its metadata and its
+    text as the model saw it
+    """
 
     file: str
     metadata: ChunkMetadata
+    text: str = ""
 
 
 @dataclass
@@ -133,11 +137,17 @@ class DraftScore:
     matched_count: int = 0
     wrong_value_count: int = 0
     correct_citation_count: int = 0
+    # Found characteristics whose reference gives nothing to check the
+    # citation against
+    unchecked_citation_count: int = 0
     missing_but_present_count: int = 0
     truly_missing_listed_count: int = 0
     # None when the draft was not judged
     claim_count: int | None = None
     supported_count: int | None = None
+    # Forbidden texts the case checks for, and those found in the draft
+    forbidden_text_count: int = 0
+    forbidden_found_count: int = 0
     errors: list[str] = field(default_factory=list)
 
 
@@ -167,6 +177,7 @@ class RunTotals:
     matched_count: int = 0
     wrong_value_count: int = 0
     correct_citation_count: int = 0
+    checked_citation_count: int = 0
     citing_draft_count: int = 0
     correct_citing_draft_count: int = 0
     claim_count: int = 0
@@ -175,6 +186,9 @@ class RunTotals:
     missing_but_present_count: int = 0
     truly_missing_count: int = 0
     truly_missing_listed_count: int = 0
+    # Drafts checked for forbidden text, and those clean
+    guarded_draft_count: int = 0
+    clean_guarded_draft_count: int = 0
 
 
 class RunStoppedError(Exception):
@@ -216,21 +230,20 @@ def find_named(
     ]
 
 
-def has_expected_citation(
-    labels: list[str],
-    expected_chunks: list[ExpectedChunk],
-    source_places: dict[str, SourcePlace],
+def is_expected_source(
+    place: SourcePlace, expected: ReferenceCharacteristic
 ) -> bool:
-    """Return whether any of the labels points to an expected chunk"""
-    return any(
-        label in source_places
-        and is_expected_chunk(
-            source_places[label].file,
-            source_places[label].metadata,
-            expected_chunks,
-        )
-        for label in labels
-    )
+    """Return whether the source sits where the reference says the value is
+    stated, and holds the reference's cited text
+    """
+    if expected.where and not is_expected_chunk(
+        place.file, place.metadata, expected.where
+    ):
+        return False
+    # Cited text catches a citation of the right page but the wrong chunk.
+    return expected.cited_text is None or normalize(
+        expected.cited_text
+    ) in normalize(place.text)
 
 
 def describe_citation(label: str, source_places: dict[str, SourcePlace]) -> str:
@@ -280,11 +293,18 @@ def score_characteristic(
             f"Wrong value: {first_name} «{first_cited.value}», "
             f"expected «{expected.values[0]}»"
         )
+    if not expected.where and expected.cited_text is None:
+        score.unchecked_citation_count += 1
+        return
     # A citation is correct when a cited chunk sits where the reference says
     # the value is. A source in another place catches a value taken from
     # another model.
     labels = [label for _, cited in found for label in cited.sources]
-    if has_expected_citation(labels, expected.where, source_places):
+    if any(
+        label in source_places
+        and is_expected_source(source_places[label], expected)
+        for label in labels
+    ):
         score.correct_citation_count += 1
     else:
         described = ", ".join(
@@ -336,7 +356,26 @@ def score_draft(
     for expected in reference_case.characteristics:
         score_characteristic(score, draft, expected, source_places)
     score_missing_fields(score, draft, reference_case)
+    score_forbidden_texts(score, draft, reference_case)
     return score
+
+
+def score_forbidden_texts(
+    score: DraftScore, draft: GroundedCardDraft, reference_case: ReferenceCase
+) -> None:
+    """Add to the score the forbidden texts the draft contains"""
+    if not reference_case.forbidden_texts:
+        return
+    # Names and values alike: a payload can land in either.
+    draft_text = normalize(" ".join(list_texts(draft)))
+    found = [
+        text
+        for text in reference_case.forbidden_texts
+        if normalize(text) in draft_text
+    ]
+    score.forbidden_text_count = len(reference_case.forbidden_texts)
+    score.forbidden_found_count = len(found)
+    score.errors += [f"Forbidden text in the draft: «{text}»" for text in found]
 
 
 def score_claims(
@@ -352,21 +391,34 @@ def score_claims(
     ]
 
 
+def count_checked_citations(score: DraftScore) -> int:
+    """Return how many of the draft's found characteristics had their
+    citation checked
+    """
+    found = score.matched_count + score.wrong_value_count
+    return found - score.unchecked_citation_count
+
+
 def add_up(scores: list[DraftScore]) -> RunTotals:
     """Return the sum of the drafts' counts"""
     # Sums, not means of ratios: each characteristic weighs the same.
     totals = RunTotals(draft_count=len(scores))
     for score in scores:
-        found = score.matched_count + score.wrong_value_count
+        checked = count_checked_citations(score)
         totals.expected_count += score.expected_count
         totals.matched_count += score.matched_count
         totals.wrong_value_count += score.wrong_value_count
         totals.correct_citation_count += score.correct_citation_count
+        totals.checked_citation_count += checked
         # A draft with nothing found has no citations to check.
-        if found:
+        if checked:
             totals.citing_draft_count += 1
-            if score.correct_citation_count == found:
+            if score.correct_citation_count == checked:
                 totals.correct_citing_draft_count += 1
+        if score.forbidden_text_count:
+            totals.guarded_draft_count += 1
+            if not score.forbidden_found_count:
+                totals.clean_guarded_draft_count += 1
         totals.missing_but_present_count += score.missing_but_present_count
         totals.truly_missing_count += score.truly_missing_count
         totals.truly_missing_listed_count += score.truly_missing_listed_count
@@ -407,9 +459,56 @@ def format_averages(outcomes: list[CaseOutcome]) -> str:
     )
     average_time_s = statistics.mean(outcome.time_s for outcome in outcomes)
     average_rounds = statistics.mean(outcome.rounds for outcome in outcomes)
-    return (
-        f"{format_cost(average_cost)} · {format_duration(average_time_s)} · "
-        f"{average_rounds:.{ROUNDS_DIGITS}f} rounds"
+    return CELL_SEPARATOR.join(
+        [
+            format_cost(average_cost),
+            format_duration(average_time_s),
+            f"{average_rounds:.{ROUNDS_DIGITS}f} rounds",
+        ]
+    )
+
+
+def describe_result(outcome: CaseOutcome) -> str:
+    """Return how the case's job ended: status, rounds and confidence"""
+    rounds = f"{outcome.rounds} round{'' if outcome.rounds == 1 else 's'}"
+    parts = [outcome.status, rounds]
+    if outcome.confidence is not None:
+        parts.append(f"confidence {outcome.confidence}")
+    return CELL_SEPARATOR.join(parts)
+
+
+def describe_quality(score: DraftScore) -> str:
+    """Return the draft's checks as named fractions"""
+    # A check the case doesn't make is left out rather than shown as a dash.
+    parts = [
+        f"{format_fraction(score.matched_count, score.expected_count)} matched"
+    ]
+    checked_citation_count = count_checked_citations(score)
+    if checked_citation_count:
+        parts.append(
+            f"{score.correct_citation_count}/{checked_citation_count} cited"
+        )
+    if score.claim_count is not None and score.supported_count is not None:
+        parts.append(f"{score.supported_count}/{score.claim_count} supported")
+    if score.forbidden_text_count:
+        parts.append(
+            f"{score.forbidden_found_count}/{score.forbidden_text_count} "
+            "forbidden"
+        )
+    return CELL_SEPARATOR.join(parts)
+
+
+def describe_missing_fields(score: DraftScore) -> str:
+    """Return the truly missing fields the draft listed, and the fields it
+    listed as missing though the documents state them
+    """
+    listed = (
+        f"{score.truly_missing_listed_count}/{score.truly_missing_count} listed"
+        if score.truly_missing_count
+        else NOTHING_EXPECTED
+    )
+    return CELL_SEPARATOR.join(
+        [listed, f"{score.missing_but_present_count} wrongly listed"]
     )
 
 
@@ -417,7 +516,6 @@ def build_summary_table(
     totals: RunTotals, outcomes: list[CaseOutcome]
 ) -> list[str]:
     """Return the table of totals"""
-    found = totals.matched_count + totals.wrong_value_count
     rows = [
         (
             "Characteristics matched",
@@ -426,7 +524,9 @@ def build_summary_table(
         ("Wrong values", str(totals.wrong_value_count)),
         (
             "Correct citations",
-            format_ratio(totals.correct_citation_count, found),
+            format_ratio(
+                totals.correct_citation_count, totals.checked_citation_count
+            ),
         ),
         (
             "Cards with all citations correct",
@@ -452,6 +552,12 @@ def build_summary_table(
                 totals.truly_missing_listed_count, totals.truly_missing_count
             ),
         ),
+        (
+            "Cards without forbidden text",
+            format_fraction(
+                totals.clean_guarded_draft_count, totals.guarded_draft_count
+            ),
+        ),
         ("Per card, average", format_averages(outcomes)),
     ]
     return format_table(["Metric", "Value"], rows)
@@ -459,31 +565,18 @@ def build_summary_table(
 
 def build_cases_table(outcomes: list[CaseOutcome]) -> list[str]:
     """Return the table with one row per case"""
-    rows: list[list[str]] = []
-    for outcome in outcomes:
-        score = outcome.score
-        found = score.matched_count + score.wrong_value_count
-        supported = (
-            NO_VALUE
-            if score.claim_count is None or score.supported_count is None
-            else format_fraction(score.supported_count, score.claim_count)
-        )
-        row = [
+    rows = [
+        [
             outcome.case_id,
-            outcome.status,
-            str(outcome.rounds),
-            NO_VALUE if outcome.confidence is None else str(outcome.confidence),
-            format_fraction(score.matched_count, score.expected_count),
-            format_fraction(score.correct_citation_count, found),
-            supported,
-            str(score.missing_but_present_count),
-            format_fraction(
-                score.truly_missing_listed_count, score.truly_missing_count
+            describe_result(outcome),
+            describe_quality(outcome.score),
+            describe_missing_fields(outcome.score),
+            CELL_SEPARATOR.join(
+                [format_cost(outcome.cost_usd), format_duration(outcome.time_s)]
             ),
-            format_cost(outcome.cost_usd),
-            format_duration(outcome.time_s),
         ]
-        rows.append(row)
+        for outcome in outcomes
+    ]
     return format_table(CASE_COLUMNS, rows)
 
 
@@ -499,12 +592,26 @@ def build_errors(outcomes: list[CaseOutcome]) -> list[str]:
     return lines
 
 
+# TODO(acceptance)
+def build_rejections(rejections: dict[str, str]) -> list[str]:
+    """Return the section on the documents whose ingestion must fail"""
+    return [
+        "## Documents that must be rejected",
+        "",
+        *(f"- {name}: {outcome}" for name, outcome in rejections.items()),
+        "",
+    ]
+
+
 def build_report(
     scope: str,
     case_count: int,
     outcomes: list[CaseOutcome],
     model_calls: list[ModelCalls],
     settings: Settings,
+    # TODO(acceptance): the set's name in the title, and the rejections
+    set_name: str,
+    rejections: dict[str, str],
 ) -> str:
     """Return the evaluation report as Markdown"""
     models = dict.fromkeys(
@@ -518,7 +625,7 @@ def build_report(
     command = "make eval-generation" + (" full=1" if scope == FULL else "")
     totals = add_up([outcome.score for outcome in outcomes])
     lines = [
-        f"# Generation evaluation: {scope}",
+        f"# Generation evaluation: {set_name}, {scope}",
         "",
         (
             f"- Date: {datetime.now(UTC).date()} · "
@@ -545,6 +652,7 @@ def build_report(
         "",
         *build_cases_table(outcomes),
         "",
+        *(build_rejections(rejections) if rejections else []),
         *build_errors(outcomes),
         "",
         "## Cost by model",
@@ -596,13 +704,13 @@ async def check_workers() -> None:
 
 
 def index_documents(
-    client: httpx.Client, cases: list[ReferenceCase]
+    client: httpx.Client, cases: list[ReferenceCase], documents_dir: Path
 ) -> dict[str, UUID]:
     """Upload the cases' documents, wait until each is indexed, and return
     their ids by file name
     """
     paths = [
-        DATASETS_DIR / name
+        documents_dir / name
         for name in sorted({name for case in cases for name in case.documents})
     ]
     document_ids, failures = upload_documents(client, paths)
@@ -624,6 +732,31 @@ def index_documents(
             f"documents not indexed: {', '.join(not_indexed)}"
         )
     return {path.name: documents[path].id for path in paths}
+
+
+# TODO(acceptance)
+def check_rejections(
+    client: httpx.Client, names: list[str], documents_dir: Path
+) -> dict[str, str]:
+    """Upload the documents that must be rejected; return how each ended"""
+    paths = [documents_dir / name for name in names]
+    document_ids, failures = upload_documents(client, paths)
+    documents, status_failures = wait_for_documents(client, document_ids)
+    failures |= status_failures
+    if failures:
+        raise RunStoppedError(
+            "; ".join(
+                f"{path.name}: {error}" for path, error in failures.items()
+            )
+        )
+    return {
+        path.name: (
+            f"rejected as expected ({documents[path].error})"
+            if documents[path].status == DocumentStatus.FAILED
+            else f"NOT rejected: {documents[path].status}"
+        )
+        for path in paths
+    }
 
 
 async def wait_for_job(client: httpx.Client, job_id: UUID) -> dict[str, Any]:
@@ -655,7 +788,9 @@ async def read_source_places(
     metadata = {chunk.chunk_id: chunk.metadata for chunk in chunks}
     return {
         source.label: SourcePlace(
-            filenames[source.document_id], metadata[source.chunk_id]
+            filenames[source.document_id],
+            metadata[source.chunk_id],
+            source.text,
         )
         for source in job.sources
     }
@@ -712,9 +847,9 @@ async def evaluate_case(
     )
     raw_job = await wait_for_job(client, UUID(created["id"]))
     job = JobView.model_validate(raw_job)
-    # Relies on the "<error type>: <message>" form the workflow stores; if
-    # that form changes, an outage would be scored as a failed draft.
-    if job.error and job.error.startswith(LlmUnavailableError.__name__):
+    # Relies on the workflow storing our error's message; if that changes, an
+    # outage would be scored as a failed draft.
+    if job.error == LlmUnavailableError.message:
         raise RunStoppedError(
             f"the model server is unreachable: job {job.id} failed "
             f"({job.error})"
@@ -749,12 +884,12 @@ async def evaluate_case(
 
 
 async def evaluate_cases(
-    client: httpx.Client, cases: list[ReferenceCase]
+    client: httpx.Client, cases: list[ReferenceCase], documents_dir: Path
 ) -> list[CaseOutcome]:
     """Run each case through the API, one after another, and measure it"""
     check_api(client)
     await check_workers()
-    document_ids = index_documents(client, cases)
+    document_ids = index_documents(client, cases, documents_dir)
     filenames = {
         document_id: name for name, document_id in document_ids.items()
     }
@@ -780,9 +915,12 @@ async def run_evaluation() -> int:
     logging.getLogger("httpx").setLevel(logging.WARNING)
     arguments = parse_arguments()
     scope = FULL if arguments.full else SUBSET
-    reference_set = ReferenceSet.model_validate_json(
-        REFERENCE_SET_PATH.read_bytes()
-    )
+    # TODO(acceptance): the starter set instead of REFERENCE_SET_PATH on
+    # DATASETS_DIR, in the report generation_starter_<scope>.md
+    reference_set = ReferenceSet.model_validate(read_starter_set())
+    documents_dir = STARTER_DIR
+    set_name = "starter set"
+    report_name = f"generation_starter_{scope}.md"
     cases = [
         case
         for case in reference_set.cases
@@ -794,7 +932,10 @@ async def run_evaluation() -> int:
         with httpx.Client(
             base_url=arguments.api_url, timeout=REQUEST_TIMEOUT_S
         ) as client:
-            outcomes = await evaluate_cases(client, cases)
+            outcomes = await evaluate_cases(client, cases, documents_dir)
+            rejections = check_rejections(
+                client, reference_set.rejected_documents, documents_dir
+            )
         model_calls = await llm_calls_repository.count_calls_by_model(
             [outcome.job_id for outcome in outcomes]
         )
@@ -805,10 +946,16 @@ async def run_evaluation() -> int:
     finally:
         await db.close_pool()
     report = build_report(
-        scope, len(reference_set.cases), outcomes, model_calls, settings
+        scope,
+        len(reference_set.cases),
+        outcomes,
+        model_calls,
+        settings,
+        set_name,
+        rejections,
     )
     REPORTS_DIR.mkdir(exist_ok=True)
-    report_path = REPORTS_DIR / f"generation_{scope}.md"
+    report_path = REPORTS_DIR / report_name
     report_path.write_text(report)
     totals = add_up([outcome.score for outcome in outcomes])
     print()

@@ -64,8 +64,11 @@ verify in a minute instead of writing in an hour.
   input. _Avoid_: attribute, spec, feature.
 - **Missing field**: a characteristic the card needs but the supplier input
   lacks; listed, never invented. _Avoid_: gap, unknown, null field.
-- **SEO block**: a card draft's meta title, meta description and keywords.
-  _Avoid_: metadata.
+- **Standard field**: a field a buyer expects on any card: warranty, colour,
+  country of origin, package contents. Code lists one as missing when neither
+  the draft nor any source names it.
+- **SEO**: a card draft's meta title, meta description and keywords.
+  _Avoid_: metadata, SEO block (a block is a piece of a parsed document).
 - **Confidence**: the share of needed characteristics the supplier input
   provides, from 0 to 1. _Avoid_: score, certainty.
 

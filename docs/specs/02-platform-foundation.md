@@ -146,7 +146,7 @@ migrations and checks. The README is the canonical command reference.
 
 Tests use disposable Postgres containers migrated with dbmate, never the
 developer's Compose database. CI (`.github/workflows/ci.yml`) runs
-`make install`, `lint`, `typecheck` and `test` on every push and pull request.
+`make setup`, `lint`, `typecheck` and `test` on every push and pull request.
 
 ## Behaviour
 

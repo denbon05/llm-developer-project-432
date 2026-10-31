@@ -376,8 +376,8 @@ is the document id only: the file never passes through Temporal
 
 - **Algorithm:** record `parsing`, run `chunk_document`, record `indexed`.
   When an activity fails for good, the workflow records `failed` with the
-  cause's type and message (best effort), then fails, as a job's workflow
-  does.
+  cause's client-facing message (best effort), then fails, as a job's
+  workflow does.
 - **Retries** start after 2 s, with backoff coefficient 2. These errors are
   not retried:
   - `UnreadableDocumentError`, because the same file fails the same way;
@@ -507,9 +507,9 @@ any non-terminal status ─▶ failed
 ### Failure reasons
 
 ```text
-UnreadableDocumentError: the PDF has no text layer; it may be a scan, and OCR is not supported
-UnreadableDocumentError: the archive unpacks to more than 100 MiB
-UnreadableDocumentError: the document contains no text
+the PDF has no text layer; it may be a scan, and OCR is not supported
+the archive unpacks to more than 100 MiB
+the document contains no text
 ```
 
 ### Durability
@@ -537,7 +537,7 @@ UnreadableDocumentError: the document contains no text
 - **ING-3:**
   - Workflow tests in Temporal's test environment with stub activities: the
     statuses go `parsing`, then `indexed`; `UnreadableDocumentError` is not
-    retried and ends `failed` with its type and message; a transient error is
+    retried and ends `failed` with its message; a transient error is
     retried.
   - Repository tests of the allowed status transitions.
 - **ING-4, ING-5, ING-7:** parser tests on the fixture documents:
@@ -552,7 +552,7 @@ UnreadableDocumentError: the document contains no text
     exactly as in the [example](#chunking-chunkerpy), with page 1, section
     `Specification`, row 3, sku `FAN-40` and brand `VentBriz`.
   - `vacuum_spec_1.xlsx`: the VCS-180 row says `Power 500 W`.
-  - `blender_kp.docx` and `blender_kp_ru.docx`: the price-list rows carry the
+  - `blender_kp_en.docx` and `blender_kp_ru.docx`: the price-list rows carry the
     skus `BLD-500`, `BLD-800` and `BLD-1200`, under `Price list (wholesale)`
     and `Прайс-лист (опт)` respectively.
 - **ING-5:** normaliser unit tests on short texts written in the test:

@@ -18,6 +18,7 @@ from app.core.config import Settings
 from app.rag import embedder
 from app.rag.retrieval import search
 from app.repositories import documents as documents_repository
+from app.repositories.chunks import MIN_CANDIDATES_PER_BRANCH
 from app.schemas.documents import (
     SEARCH_DEFAULT_MODE,
     SEARCH_DEFAULT_TOP_K,
@@ -33,9 +34,9 @@ GOLDENS_DIR = EVALS_DIR / "goldens" / "search"
 REPORTS_DIR = EVALS_DIR / "reports"
 LANGUAGES = ("en", "ru")
 DEFAULT_LANGUAGE = "en"
-# Ranks are looked for within the top 20, as many candidates as hybrid
-# search fuses by default.
-EVALUATION_DEPTH = 20
+# As deep as each hybrid branch reaches: a chunk below that in both never
+# reaches the fusion, so a deeper rank would describe another search.
+EVALUATION_DEPTH = MIN_CANDIDATES_PER_BRANCH
 RECALL_DEPTH = 5
 # Cosine similarity never falls below -1, so this threshold keeps every chunk.
 NO_THRESHOLD = -1.0

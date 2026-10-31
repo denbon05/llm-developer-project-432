@@ -177,7 +177,7 @@ def build_metadata(
     return metadata
 
 
-def build_chunks(blocks: list[ParsedBlock]) -> list[Chunk]:
+def chunk_blocks(blocks: list[ParsedBlock]) -> list[Chunk]:
     """Return the blocks' chunks in reading order, each text once"""
     chunks: list[Chunk] = []
     seen_texts: set[str] = set()

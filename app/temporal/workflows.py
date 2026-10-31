@@ -11,7 +11,7 @@ from temporalio.exceptions import (
 )
 
 with workflow.unsafe.imports_passed_through():
-    from app.core.errors import UnreadableDocumentError
+    from app.core.errors import ServiceError, UnreadableDocumentError
     from app.llm.client import LlmRequestError, LlmUnavailableError
     from app.repositories.documents import (
         DocumentNotFoundError,
@@ -110,6 +110,20 @@ INGESTION_NON_RETRYABLE_ERRORS = (
 )
 
 
+def find_subclass_names(base: type) -> frozenset[str]:
+    """Return the names of the class's subclasses, at any depth"""
+    return frozenset(
+        name
+        for subclass in base.__subclasses__()
+        for name in {subclass.__name__, *find_subclass_names(subclass)}
+    )
+
+
+# Every activity's module is imported above, so each of our errors an
+# activity can raise is defined by now.
+SERVICE_ERROR_NAMES = find_subclass_names(ServiceError)
+
+
 def build_retry_policy(
     maximum_attempts: int, non_retryable_errors: tuple[type[Exception], ...]
 ) -> RetryPolicy:
@@ -160,16 +174,18 @@ RECORD_DOCUMENT_STATUS_RETRY_POLICY = build_retry_policy(
 
 
 def describe_failure(error: ActivityError) -> str:
-    """Return the type and message of the activity failure's cause"""
+    """Return the message a client sees for the activity failure"""
     cause = error.cause if isinstance(error.cause, FailureError) else error
     # An exception raised in an activity arrives as an ApplicationError
-    # whose type is the original class name.
-    cause_type = (
-        cause.type
-        if isinstance(cause, ApplicationError)
-        else type(cause).__name__
-    )
-    return f"{cause_type}: {cause.message}"
+    # whose type is the original class name. Our errors carry messages
+    # written for clients; any other message can hold internals, such as SQL
+    # or a host name, so it stays in the workflow history.
+    if (
+        isinstance(cause, ApplicationError)
+        and cause.type in SERVICE_ERROR_NAMES
+    ):
+        return cause.message
+    return ServiceError.message
 
 
 @workflow.defn

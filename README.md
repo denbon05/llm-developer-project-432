@@ -1,17 +1,47 @@
 # AI Product Card Generator
 
 
+[![CI](https://github.com/denbon05/llm-developer-project-432/actions/workflows/ci.yml/badge.svg)](https://github.com/denbon05/llm-developer-project-432/actions/workflows/ci.yml)
 [![hexlet-check](https://github.com/denbon05/llm-developer-project-432/actions/workflows/hexlet-check.yml/badge.svg)](https://github.com/denbon05/llm-developer-project-432/actions)
 
-Build a backend service that accepts supplier documents in pdf, docx, and
-xlsx formats, builds a search index from them, and generates a product card draft —
-with source citations, a list of missing data, and a confidence level. Along the way
-you will learn an LLM client with retries, a strict Pydantic result contract, parsing
-of office documents and chunking, local embeddings with pgvector and hybrid search,
-citation with source verification, call cost tracking, generation metrics, and
-protection against document-based injections and personal data leaks.
+A backend service that turns supplier documents (PDF, DOCX, XLSX) into
+product card drafts for an online marketplace. It indexes the documents
+for hybrid search, writes each draft from the relevant chunks with a source
+for every characteristic, lists what the documents lack, and sends a draft
+it isn't sure of to a human. Personal data is masked before any model call,
+prompt injections in documents stay out of the context, and every model
+call is costed and traced. Quality is measured against reference cards:
+see the [evaluation reports](evals/reports/README.md).
 
 A Hexlet learning project: https://ru.hexlet.io/programs/llm-developer
+
+<!--
+TODO(acceptance): roll back once the project is accepted, in this order:
+1. Delete data/ (the starter supplier documents, checked byte for byte) and
+   the starter set's reports, evals/reports/generation_starter_*.md.
+2. Undo every spot that `git grep "TODO(acceptance)"` finds: the starter
+   set's evaluation, so that make eval-generation runs
+   evals/goldens/cards.json on evals/datasets/ again.
+3. Name the Russian copies explicitly, as the English ones carry _en:
+   coffee_passport_cfe_1000.pdf becomes coffee_passport_cfe_1000_ru.pdf in
+   evals/datasets/ and tests/fixtures/documents/, with every reference to
+   it (goldens, tests, specs). Then run make check.
+4. Rerun make eval-search, make eval-generation and make eval-generation
+   full=1: the committed reports predate the standard missing fields, the
+   source-label rule of the document generator, the kettle-1700-en case and
+   the grouped Cases table. kettle_manual_en.pdf joined evals/datasets/, so
+   if the search report's threshold window moved, recalibrate (ADR 0008).
+   Compare the full run with the committed generation_full.md (58/74
+   matched, 4/19 truly missing listed): on the starter set those two changes
+   lifted matched from 0.56 to 0.70 and truly missing listed from 1/5 to
+   5/5; if our set drops instead, look at the prompt rule first.
+5. Update evals/reports/README.md with the new numbers, then delete this
+   comment.
+Keep: make setup, the Seo and chunk_blocks names, the _en suffix of the
+English copies, ADR 0008, the client-facing failure messages, the standard
+missing fields, the source-label rule, and the forbidden-text and cited-text
+checks of the evaluation.
+-->
 
 
 ## Stack
@@ -44,7 +74,7 @@ Prerequisites:
 git clone https://github.com/denbon05/llm-developer-project-432.git
 cd llm-developer-project-432
 cp .env.example .env    # defaults work locally
-make install
+make setup
 make infra              # stays in this terminal and streams logs
 make migrate-up         # in a second terminal
 ```
@@ -64,6 +94,7 @@ model settings.
 ### Run
 
 ```bash
+make infra    # PostgreSQL and Temporal, first terminal
 make api      # API, second terminal; API docs at http://localhost:8000/docs
 make worker   # worker, third terminal; Temporal UI at http://localhost:8233
 curl -s localhost:8000/health/ready
@@ -137,7 +168,7 @@ detector clears it. The job's `guard_report` says what each guard did:
 
 ```text
 "guard_report": {"masked_counts": {"phone": 1, "email": 1, "tax_id": 1, "card_number": 0},
-                 "flagged_chunks": [{"filename": "kettle_manual.pdf", "page": 1,
+                 "flagged_chunks": [{"filename": "kettle_manual_en.pdf", "page": 1,
                                      "patterns": ["role_marker", "override_instruction"],
                                      "verdict": "injection", "reason": "…", …}],
                  "excluded_documents": [], "leaks": []}
@@ -146,7 +177,7 @@ detector clears it. The job's `guard_report` says what each guard did:
 A draft a guard touched (a chunk left out of its context, or personal data,
 a placeholder or an instruction found in the draft) waits in `needs_review`
 even if the critic passed it, so a human sees what happened before deciding.
-To see it, upload `tests/fixtures/documents/kettle_manual.pdf`: its terms
+To see it, upload `tests/fixtures/documents/kettle_manual_en.pdf`: its terms
 section carries a prompt injection.
 [Spec 09](docs/specs/09-guardrails.md) describes the guards.
 
@@ -158,6 +189,10 @@ make costs job=<id>     # one card's calls and its total cost
 make trace job=<id>     # one job's log lines from the API and the worker
 ```
 
+The critic and the injection detector run on `LLM_CHEAP_MODEL`. It defaults
+to `LLM_MODEL`, so locally every call shows one model, and the call
+`purpose` tells the roles apart; set a smaller model to see the split.
+
 Each response carries its request id in `X-Request-ID`.
 [Spec 08](docs/specs/08-cost-tracing-evaluation.md#tracing) describes the call
 ledger and the log events.
@@ -165,19 +200,24 @@ ledger and the log events.
 ### Evaluation
 
 ```bash
-make eval-generation          # the subset: 3 reference cases
+make eval-generation          # the subset: 2 cases
 make eval-generation full=1   # every case
 ```
 
+<!-- TODO(acceptance): both run the starter set in data/ and write
+evals/reports/generation_starter_<subset|full>.md. After the rollback they
+run evals/goldens/cards.json on evals/datasets/: the subset is 4 cases. -->
+
 It needs the API, the worker and the model server.
 [Spec 08](docs/specs/08-cost-tracing-evaluation.md#evaluation) describes the
-reference set, the metrics and the reports.
+reference set, the metrics and the reports; the latest results and the
+weakest metric are in [evals/reports](evals/reports/README.md).
 
 ### Commands
 
 | Command | Does |
 |---------|------|
-| `make install` | create `.venv` and install locked dependencies |
+| `make setup` | create `.venv` and install locked dependencies |
 | `make infra` / `make down` | start PostgreSQL and Temporal / stop them |
 | `make migrate-up` | apply pending migrations (safe to repeat) |
 | `make api` | run the API on http://localhost:8000, reloading on changes in `app/`; output also goes to `logs/api.log` |

@@ -18,7 +18,7 @@ never filled.
 ## Requirements
 
 - **OUT-1 — Card contract:** a card draft carries a title, description,
-  characteristics, benefits, an SEO block, missing fields and a confidence.
+  characteristics, benefits, SEO, missing fields and a confidence.
   Code enforces the length limits and keeps empty values and contradictory
   lists out of supplier facts and card drafts.
 - **OUT-2 — Tolerant reading:** a reply is accepted as plain JSON, JSON in a
@@ -77,25 +77,28 @@ every other prompt.
 | Model | Fields |
 |-------|--------|
 | `SupplierFacts` | `product_name`, `characteristics: dict[str, str]`, `missing_fields: list[str]` |
-| `SeoBlock` | `meta_title` (≤ 60), `meta_description` (≤ 160), `keywords: list[str]` |
-| `CardDraft` | `title` (≤ 100), `description`, `characteristics: dict[str, str]`, `benefits: list[str]`, `seo: SeoBlock`, `missing_fields: list[str]`, `confidence` (computed) |
+| `Seo` | `meta_title` (≤ 60), `meta_description` (≤ 160), `keywords: list[str]` |
+| `CardDraft` | `title` (≤ 60), `description`, `characteristics: dict[str, str]`, `benefits: list[str]`, `seo: Seo`, `missing_fields: list[str]`, `confidence` (computed) |
 | `Critique` | `verdict: "pass" \| "revise"`, `issues: list[str]` |
 | `CardPreview` | `card`, `attempts`, `verdict`, `status: "awaiting_approval" \| "needs_review"` |
 
 Validation rules, checked by code on every reply:
 
-- **Required fields:** every field of `SupplierFacts`, `SeoBlock` and
-  `CardDraft` that the model writes is required, with no default. An omitted
+- **Required fields:** the schema sent to the model requires every field of
+  `SupplierFacts`, `Seo` and `CardDraft` that the model writes. An omitted
   `missing_fields` would otherwise read as "nothing missing" and give a
-  confidence of 1.
-- **Non-blank text:** `product_name`, `title`, `description`, `meta_title`,
-  `meta_description` and every characteristic name must contain more than
-  whitespace. A blank characteristic name is an error on `characteristics`.
+  confidence of 1. In code, `SupplierFacts.missing_fields`, `CardDraft.seo`,
+  `CardDraft.missing_fields` and the SEO fields default, so drafts and facts
+  can be built without them.
+- **Non-blank text:** `product_name`, `title`, `description` and every
+  characteristic name must contain more than whitespace. A blank
+  characteristic name is an error on `characteristics`. The SEO texts may be
+  blank; the critic judges them.
 - **Blank list items:** blank entries in `benefits` and `keywords` are
   dropped.
-- **Lengths:** title at most 100 characters, meta title at most 60, meta
-  description at most 160. A value over its limit is an error, never
-  truncated.
+- **Lengths:** title at most 60 characters, where listings stop showing
+  it, meta title at most 60, meta description at most 160. A value over its
+  limit is an error, never truncated.
   The limits are stated in the prompts and checked in code, but left out of
   the schema sent to the model: a model server that enforces `maxLength`
   while decoding cuts the text mid-word, so validation never sees the long
@@ -256,8 +259,8 @@ llm_call_completed model=… latency_s=… …
   placeholder value. `missing_fields` lists only fields a buyer of the product
   type expects on its card. When the text names no product, the product type
   is the `product_name`.
-- **Generator:** the title is at most 100 characters and names the product
-  type and at least one key specification; the SEO block has a meta title of
+- **Generator:** the title is at most 60 characters and names the product
+  type and at least one key specification; the SEO has a meta title of
   at most 60 characters, a meta description of at most 160 and 3–8 keywords;
   `missing_fields` lists every missing field from the facts, and none of them
   gets a value. Revisions work as before.
@@ -313,7 +316,7 @@ llm_call_completed model=… latency_s=… …
 
 - `POST /cards` answers `200` with `status` added. Its `502` carries the
   errors when repairs run out.
-- `GET /jobs/{id}` returns the draft with its SEO block, missing fields and
+- `GET /jobs/{id}` returns the draft with its SEO, missing fields and
   confidence. No endpoint is added.
 - `jobs.result` (`jsonb`) stores the whole draft, confidence included. No
   migration.

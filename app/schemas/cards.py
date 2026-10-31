@@ -1,6 +1,6 @@
 import unicodedata
 from enum import StrEnum
-from typing import Annotated, Literal, Self
+from typing import Annotated, Any, Literal, Self
 from uuid import UUID
 
 from pydantic import (
@@ -14,6 +14,7 @@ from pydantic import (
 from pydantic_core import PydanticCustomError
 
 CARD_TITLE_MAX_LENGTH = 100
+SUPPLIER_CARD_TITLE_MAX_LENGTH = 60
 META_TITLE_MAX_LENGTH = 60
 META_DESCRIPTION_MAX_LENGTH = 160
 SUPPLIER_TEXT_MAX_LENGTH = 20_000
@@ -127,6 +128,19 @@ CardTitle = Annotated[
     ),
     AfterValidator(check_not_blank),
 ]
+# A supplier-text card's title stays within 60 characters, where listings
+# stop showing it; a document card names more and keeps
+# CARD_TITLE_MAX_LENGTH.
+SupplierCardTitle = Annotated[
+    str,
+    Field(
+        max_length=SUPPLIER_CARD_TITLE_MAX_LENGTH,
+        description=(
+            f"Card title, at most {SUPPLIER_CARD_TITLE_MAX_LENGTH} characters"
+        ),
+    ),
+    AfterValidator(check_not_blank),
+]
 CardDescription = Annotated[
     NonBlankText, Field(description="Description in 3-4 sentences")
 ]
@@ -148,8 +162,18 @@ DraftStatus = Literal["awaiting_approval", "needs_review"]
 # leaves them out of the schema it sends.
 
 
+def require_every_property(schema: dict[str, Any]) -> None:
+    """Mark every property of the model's JSON schema required"""
+    schema["required"] = list(schema.get("properties", {}))
+
+
 class SupplierFacts(BaseModel):
     """Structured facts the extractor pulled from supplier text"""
+
+    # missing_fields defaults for facts built in code; the schema the model
+    # receives still requires it, so an omitted list never reads as "nothing
+    # missing".
+    model_config = ConfigDict(json_schema_extra=require_every_property)
 
     product_name: NonBlankText = Field(
         description="Product name from the supplier text, or its product type"
@@ -158,10 +182,11 @@ class SupplierFacts(BaseModel):
         description="Characteristics as name-value pairs, only from the text"
     )
     missing_fields: list[str] = Field(
+        default=[],
         description=(
             "Characteristics a buyer of this product type expects on its card "
             "that the text does not contain (for example: warranty, color)"
-        )
+        ),
     )
 
     @model_validator(mode="after")
@@ -173,35 +198,46 @@ class SupplierFacts(BaseModel):
         return self
 
 
-class SeoBlock(BaseModel):
+class Seo(BaseModel):
     """A card draft's meta title, meta description and keywords"""
 
-    meta_title: NonBlankText = Field(
+    # Defaults let code build a draft without SEO; the schema the model
+    # receives still requires every field, and the critic judges the texts.
+    model_config = ConfigDict(json_schema_extra=require_every_property)
+
+    meta_title: str = Field(
+        default="",
         max_length=META_TITLE_MAX_LENGTH,
         description=f"Meta title, at most {META_TITLE_MAX_LENGTH} characters",
     )
-    meta_description: NonBlankText = Field(
+    meta_description: str = Field(
+        default="",
         max_length=META_DESCRIPTION_MAX_LENGTH,
         description=(
             "Meta description, "
             f"at most {META_DESCRIPTION_MAX_LENGTH} characters"
         ),
     )
-    keywords: TextList = Field(description="3-8 search keywords")
+    keywords: TextList = Field(default=[], description="3-8 search keywords")
 
 
 class CardDraft(BaseModel):
     """A generated product card draft"""
 
-    title: CardTitle
+    # seo and missing_fields default for drafts built in code; the schema the
+    # model receives still requires them.
+    model_config = ConfigDict(json_schema_extra=require_every_property)
+
+    title: SupplierCardTitle
     description: CardDescription
     characteristics: Characteristics = Field(
         description="Characteristics as name-value pairs, only from the facts"
     )
     benefits: Benefits
-    seo: SeoBlock
+    seo: Seo = Field(default_factory=Seo)
     missing_fields: list[str] = Field(
-        description="Every missing field from the facts, none given a value"
+        default=[],
+        description="Every missing field from the facts, none given a value",
     )
 
     @model_validator(mode="after")
@@ -248,7 +284,7 @@ class GroundedCardDraft(BaseModel):
         description="Characteristics by name, each with its value and sources"
     )
     benefits: Benefits
-    seo: SeoBlock
+    seo: Seo
     missing_fields: list[str] = Field(
         description=(
             "Characteristics a buyer of this product type expects on its card "

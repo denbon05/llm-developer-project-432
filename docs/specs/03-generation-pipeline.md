@@ -203,8 +203,9 @@ decisions can both pass the check; the workflow keeps only the first.
 
 An activity interrupted by a worker loss consumes an attempt; an ungraceful
 loss is detected only at its start-to-close timeout. When an activity fails for
-good, the workflow records `failed` with the cause's type and message (best
-effort), then fails.
+good, the workflow records `failed` with the cause's message when it is one
+of ours, or "internal error" for any other, whose message can hold
+internals (best effort), then fails.
 
 ## Verification
 

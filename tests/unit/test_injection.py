@@ -28,7 +28,7 @@ from tests.helpers.documents import read_document
 from tests.helpers.model_stub import Reply, stub_model
 
 # Fixtures that carry a prompt injection, and how it starts
-KETTLE_FILES = ("kettle_manual.pdf", "kettle_manual_ru.pdf")
+KETTLE_FILES = ("kettle_manual_en.pdf", "kettle_manual_ru.pdf")
 # A scan has no text layer, so no chunks to search
 SCAN_FILE = "fan_passport_fan_45_scan.pdf"
 # Passports, offers and spreadsheets with no injection in them

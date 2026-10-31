@@ -7,13 +7,13 @@ from pydantic import BaseModel, ValidationError
 
 from app.llm.client import build_response_format
 from app.schemas.cards import (
-    CARD_TITLE_MAX_LENGTH,
     META_DESCRIPTION_MAX_LENGTH,
     META_TITLE_MAX_LENGTH,
+    SUPPLIER_CARD_TITLE_MAX_LENGTH,
     CardDraft,
     Critique,
     GroundedCardDraft,
-    SeoBlock,
+    Seo,
     SupplierFacts,
 )
 
@@ -41,14 +41,22 @@ GROUNDED_DRAFT: dict[str, Any] = {
 }
 SCHEMAS_WITH_MISSING_FIELDS = [(SupplierFacts, FACTS), (CardDraft, DRAFT)]
 SCHEMAS_WITH_MISSING_FIELDS_IDS = ["facts", "draft"]
+# Fields with defaults for drafts and facts built in code; the schema the
+# model receives still requires them (see the schema tests below).
+OPTIONAL_FIELDS = {
+    ("SupplierFacts", "missing_fields"),
+    ("CardDraft", "seo"),
+    ("CardDraft", "missing_fields"),
+}
 WRITTEN_FIELDS = [
     (schema, data, field)
     for schema, data in [
         *SCHEMAS_WITH_MISSING_FIELDS,
         (GroundedCardDraft, GROUNDED_DRAFT),
-        (SeoBlock, SEO),
+        # Seo's fields default; the schema sent to the model requires them.
     ]
     for field in schema.model_fields
+    if (schema.__name__, field) not in OPTIONAL_FIELDS
 ]
 
 Location = tuple[int | str, ...]
@@ -92,18 +100,6 @@ def test_written_fields_are_required(
         (CardDraft, DRAFT, {"title": "\n"}, ("title",)),
         (CardDraft, DRAFT, {"description": ""}, ("description",)),
         (
-            CardDraft,
-            DRAFT,
-            {"seo": {**SEO, "meta_title": " "}},
-            ("seo", "meta_title"),
-        ),
-        (
-            CardDraft,
-            DRAFT,
-            {"seo": {**SEO, "meta_description": " "}},
-            ("seo", "meta_description"),
-        ),
-        (
             SupplierFacts,
             FACTS,
             {"characteristics": {" ": "800 W"}},
@@ -120,8 +116,6 @@ def test_written_fields_are_required(
         "product name",
         "title",
         "description",
-        "meta title",
-        "meta description",
         "facts characteristic name",
         "draft characteristic name",
     ],
@@ -158,7 +152,7 @@ def test_blank_list_items_are_dropped() -> None:
         (
             lambda text: {**DRAFT, "title": text},
             ("title",),
-            CARD_TITLE_MAX_LENGTH,
+            SUPPLIER_CARD_TITLE_MAX_LENGTH,
         ),
         (
             lambda text: {**DRAFT, "seo": {**SEO, "meta_title": text}},
@@ -363,3 +357,10 @@ def test_empty_cited_value_becomes_missing_field() -> None:
     assert list(draft.characteristics) == ["Power"]
     assert draft.missing_fields == ["Warranty", "Color"]
     assert draft.confidence == 0.33
+
+
+def test_seo_schema_requires_every_field() -> None:
+    """The model must write every SEO field, defaults or not"""
+    schema = Seo.model_json_schema()
+
+    assert schema["required"] == list(Seo.model_fields)

@@ -119,7 +119,7 @@ async def critique(facts: SupplierFacts, draft: CardDraft) -> Critique:
     return reply
 
 
-async def run_pipeline(supplier_text: str) -> CardPreview:
+async def preview_card(supplier_text: str) -> CardPreview:
     """Return a card draft made within the revision budget"""
     # Extraction runs once: the facts don't change because the critic
     # disliked a title. The loop is repeated on purpose in

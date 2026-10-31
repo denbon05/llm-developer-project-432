@@ -3,7 +3,7 @@ from itertools import pairwise
 from app.parsers.chunker import (
     CHUNK_OVERLAP,
     CHUNK_SIZE,
-    build_chunks,
+    chunk_blocks,
     split_text,
 )
 from app.schemas.documents import ParsedBlock, TableBlock, TableRow, TextBlock
@@ -92,7 +92,7 @@ def test_chunks_never_cross_pages_or_sections() -> None:
         TextBlock(page=2, section="Warranty", lines=["12 months"]),
     ]
 
-    chunks = build_chunks(blocks)
+    chunks = chunk_blocks(blocks)
 
     assert [
         (chunk.text, chunk.metadata["page"], chunk.metadata["section"])
@@ -109,7 +109,7 @@ def test_long_table_row_stays_one_chunk() -> None:
     description = " ".join(WORDS)
     table = build_table(["SKU", "Description"], ["FAN-40", description])
 
-    chunks = build_chunks([table])
+    chunks = chunk_blocks([table])
 
     assert len(chunks) == 1
     assert chunks[0].text == f"FAN-40: Description {description}"
@@ -125,7 +125,7 @@ def test_duplicates_are_dropped_and_positions_have_no_gaps() -> None:
         TextBlock(page=2, section=None, lines=["Weight 2.5 kg"]),
     ]
 
-    chunks = build_chunks(blocks)
+    chunks = chunk_blocks(blocks)
 
     assert [(chunk.metadata["position"], chunk.text) for chunk in chunks] == [
         (0, "Warranty 12 months"),
@@ -141,7 +141,7 @@ def test_row_text_moves_units_after_values() -> None:
         ["VentBriz 40", "40", "2.5 kg", "2,490 RUB", "EAEU certified", ""],
     )
 
-    chunks = build_chunks([table])
+    chunks = chunk_blocks([table])
 
     assert chunks[0].text == (
         "VentBriz 40: Power 40 W; Weight 2.5 kg; "
@@ -163,7 +163,7 @@ def test_sku_and_brand_columns_are_found_by_header() -> None:
         ["1", "BLD-500", "МиксерПро", "500"],
     )
 
-    chunks = build_chunks([table])
+    chunks = chunk_blocks([table])
 
     assert chunks[0].text == (
         "BLD-500: № 1; Торговая марка МиксерПро; Мощность 500 Вт"

@@ -5,6 +5,7 @@ from app.schemas.cards import (
     CARD_TITLE_MAX_LENGTH,
     META_DESCRIPTION_MAX_LENGTH,
     META_TITLE_MAX_LENGTH,
+    SUPPLIER_CARD_TITLE_MAX_LENGTH,
     CardDraft,
     GroundedCardDraft,
     SupplierFacts,
@@ -65,8 +66,8 @@ GENERATOR_INSTRUCTIONS = f"""\
 You write product cards for an online marketplace from supplier facts.
 
 Return only a JSON object with exactly these fields:
-- title (string): at most {CARD_TITLE_MAX_LENGTH} characters; names the \
-product type and at least one key specification
+- title (string): at most {SUPPLIER_CARD_TITLE_MAX_LENGTH} characters; names \
+the product type and at least one key specification
 - description (string): 3-4 sentences, specific, no filler
 - characteristics (object): characteristic names mapped to their values
 - benefits (array of strings): 3-5 benefits for the buyer
@@ -130,6 +131,9 @@ warranty, color, package contents, country of origin)
 Use only the sources. Never add a characteristic or a claim that the \
 sources do not contain.
 Every characteristic cites the ids of the sources that state its value.
+Name each characteristic with the label its source gives it, word for word: \
+a source line "Power supply 220 V" gives the name "Power supply", not \
+"Supply voltage".
 Describe only the named product. Sources about other models are context, \
 never values.
 The card is for a retail buyer: leave out wholesale prices, order and \
