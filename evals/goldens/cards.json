@@ -106,13 +106,13 @@
     },
     {
       "id": "blender-500-en",
-      "documents": ["blender_kp.docx"],
+      "documents": ["blender_kp_en.docx"],
       "hint": "BLD-500",
       "characteristics": [
-        {"names": ["Model"], "values": ["MixerPro 500"], "where": [{"file": "blender_kp.docx", "page": 1, "sku": "BLD-500"}]},
-        {"names": ["SKU", "Article", "Article number"], "values": ["BLD-500"], "where": [{"file": "blender_kp.docx", "page": 1, "sku": "BLD-500"}]},
-        {"names": ["Power", "Rated power", "Power consumption"], "values": ["500 W"], "where": [{"file": "blender_kp.docx", "page": 1, "sku": "BLD-500"}]},
-        {"names": ["Color", "Colour"], "values": ["white"], "where": [{"file": "blender_kp.docx", "page": 1, "sku": "BLD-500"}]}
+        {"names": ["Model"], "values": ["MixerPro 500"], "where": [{"file": "blender_kp_en.docx", "page": 1, "sku": "BLD-500"}]},
+        {"names": ["SKU", "Article", "Article number"], "values": ["BLD-500"], "where": [{"file": "blender_kp_en.docx", "page": 1, "sku": "BLD-500"}]},
+        {"names": ["Power", "Rated power", "Power consumption"], "values": ["500 W"], "where": [{"file": "blender_kp_en.docx", "page": 1, "sku": "BLD-500"}]},
+        {"names": ["Color", "Colour"], "values": ["white"], "where": [{"file": "blender_kp_en.docx", "page": 1, "sku": "BLD-500"}]}
       ],
       "missing_fields": []
     },

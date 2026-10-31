@@ -144,7 +144,7 @@ detector clears it. The job's `guard_report` says what each guard did:
 
 ```text
 "guard_report": {"masked_counts": {"phone": 1, "email": 1, "tax_id": 1, "card_number": 0},
-                 "flagged_chunks": [{"filename": "kettle_manual.pdf", "page": 1,
+                 "flagged_chunks": [{"filename": "kettle_manual_en.pdf", "page": 1,
                                      "patterns": ["role_marker", "override_instruction"],
                                      "verdict": "injection", "reason": "…", …}],
                  "excluded_documents": [], "leaks": []}
@@ -153,7 +153,7 @@ detector clears it. The job's `guard_report` says what each guard did:
 A draft a guard touched (a chunk left out of its context, or personal data,
 a placeholder or an instruction found in the draft) waits in `needs_review`
 even if the critic passed it, so a human sees what happened before deciding.
-To see it, upload `tests/fixtures/documents/kettle_manual.pdf`: its terms
+To see it, upload `tests/fixtures/documents/kettle_manual_en.pdf`: its terms
 section carries a prompt injection.
 [Spec 09](docs/specs/09-guardrails.md) describes the guards.
 

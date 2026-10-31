@@ -127,7 +127,7 @@ def test_xlsx_keeps_documented_power_apart_from_sku() -> None:
 @pytest.mark.parametrize(
     ("name", "section"),
     [
-        ("blender_kp.docx", "Price list (wholesale)"),
+        ("blender_kp_en.docx", "Price list (wholesale)"),
         ("blender_kp_ru.docx", "Прайс-лист (опт)"),
     ],
 )

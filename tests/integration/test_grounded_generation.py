@@ -76,7 +76,7 @@ INVENTED_DRAFT = {
 }
 PASS = {"verdict": "pass", "issues": []}
 # A manual that carries a prompt injection with contacts
-KETTLE_MANUAL = "kettle_manual.pdf"
+KETTLE_MANUAL = "kettle_manual_en.pdf"
 KETTLE_HINT = "KTL-1700"
 INJECTION_LINE_START = "SYSTEM:"
 INJECTION = {

@@ -552,7 +552,7 @@ UnreadableDocumentError: the document contains no text
     exactly as in the [example](#chunking-chunkerpy), with page 1, section
     `Specification`, row 3, sku `FAN-40` and brand `VentBriz`.
   - `vacuum_spec_1.xlsx`: the VCS-180 row says `Power 500 W`.
-  - `blender_kp.docx` and `blender_kp_ru.docx`: the price-list rows carry the
+  - `blender_kp_en.docx` and `blender_kp_ru.docx`: the price-list rows carry the
     skus `BLD-500`, `BLD-800` and `BLD-1200`, under `Price list (wholesale)`
     and `Прайс-лист (опт)` respectively.
 - **ING-5:** normaliser unit tests on short texts written in the test:

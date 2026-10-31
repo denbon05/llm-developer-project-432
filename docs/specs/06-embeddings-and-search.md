@@ -487,7 +487,7 @@ Other statuses keep their [05 meaning](05-document-ingestion.md#document-status)
    of the `indexed` documents. A second run embeds none. *(manual + test)*
 3. A document uploaded after this spec goes `parsing`, `embedding`, `indexed`,
    and every chunk has a vector. *(manual + test)*
-4. `What is the blender's power?` finds a price-list row of `blender_kp.docx`
+4. `What is the blender's power?` finds a price-list row of `blender_kp_en.docx`
    in the top 5 by vector and hybrid search; keyword search returns nothing.
    *(manual, in the en report)*
 5. `FAN-50` ranks the price-list chunk of `fan_kp_2.pdf` first in hybrid

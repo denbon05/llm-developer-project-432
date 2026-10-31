@@ -13,7 +13,7 @@ from tests.helpers.model_stub import stub_model
 from tests.helpers.seeds import ingest_fixture
 
 # An offer that lists its account manager's contacts
-OFFER = "blender_kp.docx"
+OFFER = "blender_kp_en.docx"
 HINT = "BLD-800"
 PHONE = "+7 926 555-14-08"
 EMAIL = "a.smirnova@technodom.example"

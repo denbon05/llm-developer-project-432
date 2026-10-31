@@ -113,7 +113,7 @@ def test_check_upload_refuses_long_name_first() -> None:
         (DocumentFormat.XLSX, ZIP_CONTENT, UNREADABLE_XLSX_REASON),
         (
             DocumentFormat.XLSX,
-            (DOCUMENTS_DIR / "blender_kp.docx").read_bytes(),
+            (DOCUMENTS_DIR / "blender_kp_en.docx").read_bytes(),
             UNREADABLE_XLSX_REASON,
         ),
         (

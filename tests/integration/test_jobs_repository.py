@@ -186,7 +186,7 @@ async def test_guard_report_parts_are_stored_and_read_back() -> None:
     flagged = FlaggedChunk(
         chunk_id=uuid4(),
         document_id=document_id,
-        filename="kettle_manual.pdf",
+        filename="kettle_manual_en.pdf",
         page=1,
         patterns=["role_marker"],
         verdict=InjectionVerdict.UNVERIFIED,
@@ -194,7 +194,7 @@ async def test_guard_report_parts_are_stored_and_read_back() -> None:
     )
     excluded = ExcludedDocument(
         document_id=document_id,
-        filename="kettle_manual.pdf",
+        filename="kettle_manual_en.pdf",
         excluded_chunk_count=2,
     )
     leaks = [Leak(field="description", kind="phone")]
