@@ -196,7 +196,8 @@ def assemble_context(chunks: list[ContextChunk]) -> AssembledContext:
 # chunk mappings: each chunk under a header naming its id and place, within
 # a budget of characters.
 DEFAULT_CONTEXT_MAX_CHARS = 12_000
-CONTEXT_HEADER = re.compile(r"^\[([^\]]+)\]", re.MULTILINE)
+# The id ends at a space, a bar or the bracket: "[c1] f.pdf" or "[c1 | f.pdf]"
+CONTEXT_HEADER = re.compile(r"^\[([^\]\s|]+)", re.MULTILINE)
 
 
 def describe_chunk_place(chunk: dict[str, Any]) -> str:
@@ -230,6 +231,6 @@ def build_context(
     return "\n\n".join(parts)
 
 
-def context_chunk_ids(context: str) -> list[str]:
-    """Return the ids of the chunks in a context, in order"""
-    return CONTEXT_HEADER.findall(context)
+def context_chunk_ids(context: str) -> set[str]:
+    """Return the ids of the chunks in a context"""
+    return set(CONTEXT_HEADER.findall(context))

@@ -10,6 +10,7 @@ from app.agents.prompts import (
     build_grounded_critic_messages,
     build_grounded_generator_messages,
 )
+from app.core import db
 from app.core.config import get_settings
 from app.core.errors import ConflictError, NotFoundError, ServiceError
 from app.core.logging import get_logger
@@ -19,6 +20,7 @@ from app.rag import retrieval
 from app.rag.context import (
     ContextChunk,
     assemble_context,
+    build_context,
     choose_title,
     filter_chunks,
     find_naming_documents,
@@ -423,3 +425,25 @@ async def critique(
         "critique_completed", verdict=reply.verdict, issues=reply.issues
     )
     return reply
+
+
+# TODO(acceptance): the retrieval step the external acceptance tests
+# substitute: hybrid search over the acceptance tables, as a context text.
+async def retrieve_context_async(
+    query: str, doc_ids: list[str] | None = None, top_k: int = CANDIDATE_COUNT
+) -> str:
+    """Return the context text of the chunks hybrid search finds"""
+    with db.connection() as conn:
+        results = chunks_repository.search_hybrid(
+            conn, query, top_k=top_k, doc_ids=doc_ids
+        )
+    return build_context(
+        [
+            {
+                "chunk_id": result["id"],
+                "text": result["text"],
+                "metadata": result["metadata"],
+            }
+            for result in results
+        ]
+    )

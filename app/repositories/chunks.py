@@ -6,6 +6,7 @@ import asyncpg
 from app.core import db
 from app.core.config import get_settings
 from app.schemas.documents import (
+    SEARCH_DEFAULT_TOP_K,
     Chunk,
     ChunkText,
     DocumentStatus,
@@ -382,7 +383,7 @@ async def search_by_keyword(request: SearchRequest) -> list[SearchResult]:
     return [to_search_result(row) for row in rows]
 
 
-async def search_hybrid(
+async def search_by_rank_fusion(
     request: SearchRequest,
     query_vector: list[float],
     *,
@@ -421,3 +422,104 @@ def embed_query(text: str) -> list[float]:
         [f"{get_settings().embedding_query_prefix}{text}"]
     )
     return vector
+
+
+# TODO(acceptance): synchronous search over the acceptance tables (see
+# repositories/acceptance.py), on the connection the external tests pass in.
+# Each result is a mapping of the chunk's id, document, text, metadata and
+# score.
+RESULT_KEYS = ("id", "doc_id", "text", "metadata", "score")
+ACCEPTANCE_DOC_FILTER = (
+    "(%(doc_ids)s::text[] IS NULL OR doc_id = ANY(%(doc_ids)s))"
+)
+
+
+def read_results(rows: list[Any]) -> list[dict[str, Any]]:
+    """Return the rows as result mappings, the id also as chunk_id"""
+    results: list[dict[str, Any]] = [
+        dict(zip(RESULT_KEYS, row, strict=True)) for row in rows
+    ]
+    for result in results:
+        result["chunk_id"] = result["id"]
+    return results
+
+
+def format_vector(vector: list[float]) -> str:
+    """Return the vector in pgvector's text form"""
+    return "[" + ",".join(str(value) for value in vector) + "]"
+
+
+def search_vector(
+    conn: Any,
+    query: str,
+    top_k: int = SEARCH_DEFAULT_TOP_K,
+    threshold: float | None = None,
+    doc_ids: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    """Return the chunks nearest the query, above the threshold"""
+    min_similarity = (
+        get_settings().search_min_similarity if threshold is None else threshold
+    )
+    rows = conn.execute(
+        f"""
+        SELECT id, doc_id, text, metadata,
+               1 - (embedding <=> %(vector)s::vector) AS score
+        FROM chunks
+        WHERE embedding IS NOT NULL AND {ACCEPTANCE_DOC_FILTER}
+        ORDER BY embedding <=> %(vector)s::vector, id
+        LIMIT %(top_k)s
+        """,
+        {
+            "vector": format_vector(embed_query(query)),
+            "doc_ids": doc_ids,
+            "top_k": top_k,
+        },
+    ).fetchall()
+    return [
+        result
+        for result in read_results(rows)
+        if result["score"] >= min_similarity
+    ]
+
+
+def search_fts(
+    conn: Any,
+    query: str,
+    top_k: int = SEARCH_DEFAULT_TOP_K,
+    doc_ids: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    """Return the chunks holding every word of the query, by rank"""
+    rows = conn.execute(
+        f"""
+        SELECT id, doc_id, text, metadata, ts_rank(tsv, query) AS score
+        FROM chunks, websearch_to_tsquery('russian', %(query)s) AS query
+        WHERE tsv @@ query AND {ACCEPTANCE_DOC_FILTER}
+        ORDER BY score DESC, id
+        LIMIT %(top_k)s
+        """,
+        {"query": query, "doc_ids": doc_ids, "top_k": top_k},
+    ).fetchall()
+    return read_results(rows)
+
+
+def search_hybrid(
+    conn: Any,
+    query: str,
+    top_k: int = SEARCH_DEFAULT_TOP_K,
+    doc_ids: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    """Return the chunks of both searches, fused by reciprocal rank"""
+    candidate_count = max(MIN_CANDIDATES_PER_BRANCH, top_k)
+    branches = [
+        search_vector(conn, query, candidate_count, doc_ids=doc_ids),
+        search_fts(conn, query, candidate_count, doc_ids=doc_ids),
+    ]
+    fused: dict[str, dict[str, Any]] = {}
+    for results in branches:
+        for rank, result in enumerate(results, start=1):
+            entry = fused.setdefault(result["id"], {**result, "score": 0.0})
+            entry["score"] += 1 / (RRF_K + rank)
+    ranked = sorted(
+        fused.values(), key=lambda entry: (-entry["score"], entry["id"])
+    )
+    return ranked[:top_k]
