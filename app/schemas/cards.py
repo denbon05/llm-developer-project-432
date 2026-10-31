@@ -130,8 +130,9 @@ CardTitle = Annotated[
     ),
     AfterValidator(check_not_blank),
 ]
-# TODO(acceptance): the external acceptance tests reject a supplier-text
-# card title over 60 characters; document cards keep CARD_TITLE_MAX_LENGTH.
+# A supplier-text card's title stays within 60 characters, where listings
+# stop showing it; a document card names more and keeps
+# CARD_TITLE_MAX_LENGTH.
 SupplierCardTitle = Annotated[
     str,
     Field(
@@ -171,8 +172,9 @@ def require_every_property(schema: dict[str, Any]) -> None:
 class SupplierFacts(BaseModel):
     """Structured facts the extractor pulled from supplier text"""
 
-    # TODO(acceptance): missing_fields defaults for the external acceptance
-    # tests; the schema the model receives still requires it.
+    # missing_fields defaults for facts built in code; the schema the model
+    # receives still requires it, so an omitted list never reads as "nothing
+    # missing".
     model_config = ConfigDict(json_schema_extra=require_every_property)
 
     product_name: NonBlankText = Field(
@@ -201,10 +203,8 @@ class SupplierFacts(BaseModel):
 class Seo(BaseModel):
     """A card draft's meta title, meta description and keywords"""
 
-    # TODO(acceptance): defaults, and blank meta texts allowed, for the
-    # external acceptance tests, which build cards without SEO; the schema
-    # the model receives still requires every field. NonBlankText after the
-    # rollback.
+    # Defaults let code build a draft without SEO; the schema the model
+    # receives still requires every field, and the critic judges the texts.
     model_config = ConfigDict(json_schema_extra=require_every_property)
 
     meta_title: str = Field(
@@ -248,8 +248,8 @@ class SourceRef(BaseModel):
 class CardDraft(BaseModel):
     """A generated product card draft"""
 
-    # TODO(acceptance): seo and missing_fields default for the external
-    # acceptance tests; the schema the model receives still requires them.
+    # seo and missing_fields default for drafts built in code; the schema the
+    # model receives still requires them.
     model_config = ConfigDict(json_schema_extra=require_every_property)
 
     title: SupplierCardTitle

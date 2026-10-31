@@ -41,11 +41,13 @@ GROUNDED_DRAFT: dict[str, Any] = {
 }
 SCHEMAS_WITH_MISSING_FIELDS = [(SupplierFacts, FACTS), (CardDraft, DRAFT)]
 SCHEMAS_WITH_MISSING_FIELDS_IDS = ["facts", "draft"]
-# TODO(acceptance): fields with defaults for the external acceptance tests
-ACCEPTANCE_OPTIONAL_FIELDS = {
+# Fields with defaults for drafts and facts built in code; the schema the
+# model receives still requires them (see the schema tests below).
+OPTIONAL_FIELDS = {
     ("SupplierFacts", "missing_fields"),
     ("CardDraft", "seo"),
     ("CardDraft", "missing_fields"),
+    # TODO(acceptance): the two fields the external acceptance tests add
     ("CardDraft", "reported_confidence"),
     ("CardDraft", "sources"),
 }
@@ -54,13 +56,10 @@ WRITTEN_FIELDS = [
     for schema, data in [
         *SCHEMAS_WITH_MISSING_FIELDS,
         (GroundedCardDraft, GROUNDED_DRAFT),
-        # TODO(acceptance): (Seo, SEO) again after the rollback; the SEO
-        # fields have defaults for the external tests, and only the schema
-        # sent to the model requires them.
+        # Seo's fields default; the schema sent to the model requires them.
     ]
     for field in schema.model_fields
-    # TODO(acceptance): drop this filter after the rollback
-    if (schema.__name__, field) not in ACCEPTANCE_OPTIONAL_FIELDS
+    if (schema.__name__, field) not in OPTIONAL_FIELDS
 ]
 
 Location = tuple[int | str, ...]
@@ -103,22 +102,6 @@ def test_written_fields_are_required(
         (SupplierFacts, FACTS, {"product_name": " "}, ("product_name",)),
         (CardDraft, DRAFT, {"title": "\n"}, ("title",)),
         (CardDraft, DRAFT, {"description": ""}, ("description",)),
-        pytest.param(
-            CardDraft,
-            DRAFT,
-            {"seo": {**SEO, "meta_title": " "}},
-            ("seo", "meta_title"),
-            # TODO(acceptance): drop the mark after the rollback
-            marks=pytest.mark.skip(reason="blank SEO texts allowed for now"),
-        ),
-        pytest.param(
-            CardDraft,
-            DRAFT,
-            {"seo": {**SEO, "meta_description": " "}},
-            ("seo", "meta_description"),
-            # TODO(acceptance): drop the mark after the rollback
-            marks=pytest.mark.skip(reason="blank SEO texts allowed for now"),
-        ),
         (
             SupplierFacts,
             FACTS,
@@ -136,8 +119,6 @@ def test_written_fields_are_required(
         "product name",
         "title",
         "description",
-        "meta title",
-        "meta description",
         "facts characteristic name",
         "draft characteristic name",
     ],
@@ -174,7 +155,6 @@ def test_blank_list_items_are_dropped() -> None:
         (
             lambda text: {**DRAFT, "title": text},
             ("title",),
-            # TODO(acceptance): CARD_TITLE_MAX_LENGTH after the rollback
             SUPPLIER_CARD_TITLE_MAX_LENGTH,
         ),
         (

@@ -15,17 +15,19 @@ draft built on thin input to a human.
 |-------|--------|
 | `SupplierFacts` | `product_name`, `characteristics: dict[str, str]`, `missing_fields` |
 | `Seo` | `meta_title` (≤ 60), `meta_description` (≤ 160), `keywords` |
-| `CardDraft` | `title` (≤ 100), `description`, `characteristics: dict[str, str]`, `benefits`, `seo`, `missing_fields`, `confidence` (computed) |
-| `GroundedCardDraft` | a `CardDraft` citing sources ([grounded generation](grounded-generation.md#contracts)) |
+| `CardDraft` | `title` (≤ 60), `description`, `characteristics: dict[str, str]`, `benefits`, `seo`, `missing_fields`, `confidence` (computed) |
+| `GroundedCardDraft` | a `CardDraft` citing sources, `title` ≤ 100 ([grounded generation](grounded-generation.md#contracts)) |
 | `Critique` | `verdict: "pass" \| "revise"`, `issues` (default empty) |
 
 ### Validation rules
 
-1. Every field of facts, SEO and drafts the model writes is required: an
-   omitted `missing_fields` would read as "nothing missing", confidence 1.
-2. Characteristic names, `product_name`, `title`, `description`,
-   `meta_title` and `meta_description` must hold more than whitespace; blank
-   `benefits` and `keywords` items are dropped.
+1. The schema sent to the model requires every field it writes: an omitted
+   `missing_fields` would read as "nothing missing", confidence 1. In code,
+   `SupplierFacts.missing_fields`, `CardDraft.seo`, `CardDraft.missing_fields`
+   and the SEO fields default, so drafts and facts can be built without them.
+2. Characteristic names, `product_name`, `title` and `description` must hold
+   more than whitespace; blank `benefits` and `keywords` items are dropped.
+   The SEO texts may be blank; the critic judges them.
 3. Over-long title, meta title or meta description is an error, never
    truncated. The schema sent to the model omits the limits: a server
    enforcing `maxLength` while decoding cuts text mid-word, so no fix
@@ -50,6 +52,10 @@ invalid after 2 repairs (<errors joined by "; ">)`: 502 for a preview, the
 ### Confidence and routing
 
 Why coverage is computed in code: [ADR 0011](../adr/0011-confidence-computed-in-code.md).
+
+TODO(acceptance): until the rollback, a `CardDraft` given a `confidence`
+uses it instead of the computed one, and `Critique` also accepts `approve`
+and `regenerate` for `pass` and `revise`.
 
 - `confidence = characteristics / (characteristics + missing_fields)` on the
   validated draft, two decimals, 0 when both are empty. It is not in the

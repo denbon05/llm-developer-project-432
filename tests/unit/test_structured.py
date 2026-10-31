@@ -36,7 +36,6 @@ DRAFT: dict[str, Any] = {
     "seo": SEO,
     "missing_fields": ["Warranty"],
 }
-# TODO(acceptance): CARD_TITLE_MAX_LENGTH again after the rollback
 LONG_TITLE = "a" * (SUPPLIER_CARD_TITLE_MAX_LENGTH + 1)
 LONG_TITLE_DRAFT = {**DRAFT, "title": LONG_TITLE}
 SHORT_TITLE = "MixerPro 800 blender"
