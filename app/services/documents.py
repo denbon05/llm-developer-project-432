@@ -245,4 +245,6 @@ def parse_to_chunks(
     chunks, _ = read_chunks(DocumentFormat(document_format), content)
     for chunk in chunks:
         chunk.metadata["doc_id"] = document_id
+        if "sku" in chunk.metadata:
+            chunk.metadata["articul"] = chunk.metadata["sku"]
     return chunks

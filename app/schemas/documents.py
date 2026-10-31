@@ -167,6 +167,7 @@ class ChunkMetadata(TypedDict):
     brand: NotRequired[str]
     # TODO(acceptance): set only for the external acceptance tests
     doc_id: NotRequired[str]
+    articul: NotRequired[str]
 
 
 class Chunk(BaseModel):

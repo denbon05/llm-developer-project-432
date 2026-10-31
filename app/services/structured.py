@@ -19,7 +19,7 @@ from app.llm.client import (
     ChatMessage,
     run_agent,
 )
-from app.schemas.cards import CardDraft, DraftStatus
+from app.schemas.cards import CardDraft
 from app.services.json_utils import JsonReadError, read_json_object
 
 # Output repairs and field fixes together, after the first call
@@ -175,6 +175,9 @@ async def complete_structured[ModelT: BaseModel](
 # The product generates through services.pipeline; these wrap the same
 # repair loop and field fix.
 CardValidationError = InvalidModelOutputError
+REPORTED_CONFIDENCE_KEY = "confidence"
+GATE_NEEDS_REVIEW = "needs_review"
+GATE_DONE = "done"
 
 
 def build_card_messages(facts: str) -> list[ChatMessage]:
@@ -216,11 +219,15 @@ async def regenerate_field(
         request[-1].content,
     )
     reply = read_json_object(text)
-    return CardDraft.model_validate(card.model_dump() | {field: reply[field]})
+    # Only what was set: a default SEO field would fail validation as blank.
+    data = card.model_dump(exclude_unset=True) | {field: reply[field]}
+    if card.reported_confidence is not None:
+        data[REPORTED_CONFIDENCE_KEY] = card.reported_confidence
+    return CardDraft.model_validate(data)
 
 
-def confidence_gate(card: CardDraft) -> DraftStatus:
-    """Return the status the card's confidence alone sends it to"""
+def confidence_gate(card: CardDraft) -> str:
+    """Return where the card's confidence alone sends it"""
     if card.confidence < get_settings().card_confidence_threshold:
-        return "needs_review"
-    return "awaiting_approval"
+        return GATE_NEEDS_REVIEW
+    return GATE_DONE

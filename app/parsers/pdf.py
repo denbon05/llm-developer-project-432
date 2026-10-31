@@ -6,7 +6,13 @@ import pdfplumber
 
 from app.core.errors import UnreadableDocumentError
 from app.parsers.blocks import build_blocks
-from app.schemas.documents import HeadedLine, ParsedBlock, ParsedDocument
+from app.schemas.documents import (
+    HeadedLine,
+    ParsedBlock,
+    ParsedDocument,
+    TableBlock,
+    TableRow,
+)
 
 UNREADABLE_PDF_REASON = "the file is not a readable PDF"
 NO_TEXT_LAYER_REASON = (
@@ -88,5 +94,21 @@ PdfNoTextLayer = UnreadableDocumentError
 # TODO(acceptance): the name the external acceptance tests import; it returns
 # the blocks alone.
 def parse_pdf(content: bytes) -> list[ParsedBlock]:
-    """Return the blocks read from the file, in reading order"""
-    return read_pdf(content).blocks
+    """Return the blocks read from the file, then its tables as table blocks"""
+    blocks = read_pdf(content).blocks
+    with pdfplumber.open(io.BytesIO(content)) as pdf:
+        for page_number, page in enumerate(pdf.pages, start=1):
+            for table in page.extract_tables():
+                headers, *rows = [[cell or "" for cell in row] for row in table]
+                blocks.append(
+                    TableBlock(
+                        page=page_number,
+                        section=None,
+                        headers=headers,
+                        rows=[
+                            TableRow(number=number, cells=cells)
+                            for number, cells in enumerate(rows, start=2)
+                        ],
+                    )
+                )
+    return blocks

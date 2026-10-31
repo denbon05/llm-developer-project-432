@@ -236,15 +236,20 @@ class Seo(BaseModel):
 class CardDraft(BaseModel):
     """A generated product card draft"""
 
+    # TODO(acceptance): seo and missing_fields default for the external
+    # acceptance tests; the schema the model receives still requires them.
+    model_config = ConfigDict(json_schema_extra=require_every_property)
+
     title: SupplierCardTitle
     description: CardDescription
     characteristics: Characteristics = Field(
         description="Characteristics as name-value pairs, only from the facts"
     )
     benefits: Benefits
-    seo: Seo
+    seo: Seo = Field(default_factory=Seo)
     missing_fields: list[str] = Field(
-        description="Every missing field from the facts, none given a value"
+        default=[],
+        description="Every missing field from the facts, none given a value",
     )
 
     @model_validator(mode="after")
@@ -255,9 +260,8 @@ class CardDraft(BaseModel):
         )
         return self
 
-    # TODO(acceptance): a confidence the external acceptance tests pass in.
-    # It can only lower the computed one, and the schema sent to the model
-    # leaves it out.
+    # TODO(acceptance): a confidence the external acceptance tests pass in
+    # replaces the computed one; the schema sent to the model leaves it out.
     reported_confidence: SkipJsonSchema[float | None] = Field(
         default=None, ge=0, le=1, alias="confidence", exclude=True
     )
@@ -273,19 +277,16 @@ class CardDraft(BaseModel):
         )
         if self.reported_confidence is None:
             return computed
-        return min(computed, self.reported_confidence)
+        return self.reported_confidence
 
     @model_validator(mode="after")
-    def keep_only_a_lower_confidence(self) -> Self:
-        """Drop a reported confidence that doesn't lower the computed one"""
+    def drop_echoed_confidence(self) -> Self:
+        """Drop a reported confidence equal to the computed one"""
         # A draft read back from its own JSON carries its computed confidence.
         computed = compute_confidence(
             len(self.characteristics), len(self.missing_fields)
         )
-        if (
-            self.reported_confidence is not None
-            and self.reported_confidence >= computed
-        ):
+        if self.reported_confidence == computed:
             self.reported_confidence = None
         return self
 
