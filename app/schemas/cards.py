@@ -234,6 +234,17 @@ class Seo(BaseModel):
         return self.meta_description
 
 
+# TODO(acceptance): a reference to the chunk a value comes from, as the
+# external acceptance tests' cards cite them
+class SourceRef(BaseModel):
+    """A reference to the chunk a value comes from"""
+
+    chunk_id: str
+    doc_id: str = ""
+    page: int | None = None
+    score: float | None = None
+
+
 class CardDraft(BaseModel):
     """A generated product card draft"""
 
@@ -266,6 +277,9 @@ class CardDraft(BaseModel):
     reported_confidence: SkipJsonSchema[float | None] = Field(
         default=None, ge=0, le=1, alias="confidence", exclude=True
     )
+    # TODO(acceptance): the chunks the external acceptance tests' cards cite;
+    # the schema sent to the model and the API output leave them out.
+    sources: SkipJsonSchema[list[SourceRef]] = Field(default=[], exclude=True)
 
     # Computed, so it is not in the schema the generator receives, and a
     # value the model sends is ignored.
@@ -452,14 +466,5 @@ class CardRequest(BaseModel):
     supplier_text: SupplierText
 
 
-# TODO(acceptance): the names the external acceptance tests import.
+# TODO(acceptance): the name the external acceptance tests import.
 CritiqueReport = Critique
-
-
-class SourceRef(BaseModel):
-    """A reference to the chunk a value comes from"""
-
-    chunk_id: str
-    doc_id: str = ""
-    page: int | None = None
-    score: float | None = None

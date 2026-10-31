@@ -47,6 +47,7 @@ ACCEPTANCE_OPTIONAL_FIELDS = {
     ("CardDraft", "seo"),
     ("CardDraft", "missing_fields"),
     ("CardDraft", "reported_confidence"),
+    ("CardDraft", "sources"),
 }
 WRITTEN_FIELDS = [
     (schema, data, field)
