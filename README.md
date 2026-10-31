@@ -1,15 +1,17 @@
 # AI Product Card Generator
 
 
+[![CI](https://github.com/denbon05/llm-developer-project-432/actions/workflows/ci.yml/badge.svg)](https://github.com/denbon05/llm-developer-project-432/actions/workflows/ci.yml)
 [![hexlet-check](https://github.com/denbon05/llm-developer-project-432/actions/workflows/hexlet-check.yml/badge.svg)](https://github.com/denbon05/llm-developer-project-432/actions)
 
-Build a backend service that accepts supplier documents in pdf, docx, and
-xlsx formats, builds a search index from them, and generates a product card draft —
-with source citations, a list of missing data, and a confidence level. Along the way
-you will learn an LLM client with retries, a strict Pydantic result contract, parsing
-of office documents and chunking, local embeddings with pgvector and hybrid search,
-citation with source verification, call cost tracking, generation metrics, and
-protection against document-based injections and personal data leaks.
+A backend service that turns supplier documents (PDF, DOCX, XLSX) into
+product card drafts for an online marketplace. It indexes the documents
+for hybrid search, writes each draft from the relevant chunks with a source
+for every characteristic, lists what the documents lack, and sends a draft
+it isn't sure of to a human. Personal data is masked before any model call,
+prompt injections in documents stay out of the context, and every model
+call is costed and traced. Quality is measured against reference cards:
+see the [evaluation reports](evals/reports/README.md).
 
 A Hexlet learning project: https://ru.hexlet.io/programs/llm-developer
 
@@ -64,7 +66,7 @@ checks of the evaluation.
   embedding model run by fastembed
 
 Design documents: [specs](docs/specs/README.md), [decision records](docs/adr/),
-[glossary](CONTEXT.md).
+[glossary](CONTEXT.md), [build order](docs/build-order.md).
 
 ## Installation
 
@@ -221,7 +223,8 @@ run evals/goldens/cards.json on evals/datasets/: the subset is 4 cases. -->
 
 It needs the API, the worker and the model server.
 [The evaluation spec](docs/specs/evaluation.md#generation-evaluation)
-describes the reference set, the metrics and the reports.
+describes the reference set, the metrics and the reports; the latest results
+and the weakest metric are in [evals/reports](evals/reports/README.md).
 
 ### Commands
 
