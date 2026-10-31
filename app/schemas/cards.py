@@ -173,7 +173,7 @@ class SupplierFacts(BaseModel):
         return self
 
 
-class SeoBlock(BaseModel):
+class Seo(BaseModel):
     """A card draft's meta title, meta description and keywords"""
 
     meta_title: NonBlankText = Field(
@@ -199,7 +199,7 @@ class CardDraft(BaseModel):
         description="Characteristics as name-value pairs, only from the facts"
     )
     benefits: Benefits
-    seo: SeoBlock
+    seo: Seo
     missing_fields: list[str] = Field(
         description="Every missing field from the facts, none given a value"
     )
@@ -248,7 +248,7 @@ class GroundedCardDraft(BaseModel):
         description="Characteristics by name, each with its value and sources"
     )
     benefits: Benefits
-    seo: SeoBlock
+    seo: Seo
     missing_fields: list[str] = Field(
         description=(
             "Characteristics a buyer of this product type expects on its card "
@@ -374,7 +374,6 @@ class CardRequest(BaseModel):
 
 # TODO(acceptance): the names the external acceptance tests import.
 CritiqueReport = Critique
-Seo = SeoBlock
 
 
 class SourceRef(BaseModel):

@@ -161,3 +161,7 @@ async def detect_injection(
         verdict=verdict,
         reason=reason,
     )
+
+
+# TODO(acceptance): the name the external acceptance tests import.
+detect_injection_regex = find_injection_patterns

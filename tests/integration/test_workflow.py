@@ -14,7 +14,7 @@ from app.schemas.cards import (
     CardDraft,
     Critique,
     Leak,
-    SeoBlock,
+    Seo,
     SupplierFacts,
 )
 from app.schemas.jobs import (
@@ -40,7 +40,7 @@ DRAFT = CardDraft(
     description="An 800 W immersion blender.",
     characteristics={"Power": "800 W"},
     benefits=["Enough power for ice"],
-    seo=SeoBlock(
+    seo=Seo(
         meta_title="MixerPro 800 immersion blender",
         meta_description="An 800 W immersion blender.",
         keywords=["immersion blender"],

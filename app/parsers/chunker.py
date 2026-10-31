@@ -177,7 +177,7 @@ def build_metadata(
     return metadata
 
 
-def build_chunks(blocks: list[ParsedBlock]) -> list[Chunk]:
+def chunk_blocks(blocks: list[ParsedBlock]) -> list[Chunk]:
     """Return the blocks' chunks in reading order, each text once"""
     chunks: list[Chunk] = []
     seen_texts: set[str] = set()
@@ -192,7 +192,3 @@ def build_chunks(blocks: list[ParsedBlock]) -> list[Chunk]:
             Chunk(text=text, metadata=build_metadata(len(chunks), block, row))
         )
     return chunks
-
-
-# TODO(acceptance): the name the external acceptance tests import.
-chunk_blocks = build_chunks

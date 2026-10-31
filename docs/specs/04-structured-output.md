@@ -77,14 +77,14 @@ every other prompt.
 | Model | Fields |
 |-------|--------|
 | `SupplierFacts` | `product_name`, `characteristics: dict[str, str]`, `missing_fields: list[str]` |
-| `SeoBlock` | `meta_title` (≤ 60), `meta_description` (≤ 160), `keywords: list[str]` |
-| `CardDraft` | `title` (≤ 100), `description`, `characteristics: dict[str, str]`, `benefits: list[str]`, `seo: SeoBlock`, `missing_fields: list[str]`, `confidence` (computed) |
+| `Seo` | `meta_title` (≤ 60), `meta_description` (≤ 160), `keywords: list[str]` |
+| `CardDraft` | `title` (≤ 100), `description`, `characteristics: dict[str, str]`, `benefits: list[str]`, `seo: Seo`, `missing_fields: list[str]`, `confidence` (computed) |
 | `Critique` | `verdict: "pass" \| "revise"`, `issues: list[str]` |
 | `CardPreview` | `card`, `attempts`, `verdict`, `status: "awaiting_approval" \| "needs_review"` |
 
 Validation rules, checked by code on every reply:
 
-- **Required fields:** every field of `SupplierFacts`, `SeoBlock` and
+- **Required fields:** every field of `SupplierFacts`, `Seo` and
   `CardDraft` that the model writes is required, with no default. An omitted
   `missing_fields` would otherwise read as "nothing missing" and give a
   confidence of 1.

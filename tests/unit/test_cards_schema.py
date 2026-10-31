@@ -13,7 +13,7 @@ from app.schemas.cards import (
     CardDraft,
     Critique,
     GroundedCardDraft,
-    SeoBlock,
+    Seo,
     SupplierFacts,
 )
 
@@ -46,7 +46,7 @@ WRITTEN_FIELDS = [
     for schema, data in [
         *SCHEMAS_WITH_MISSING_FIELDS,
         (GroundedCardDraft, GROUNDED_DRAFT),
-        (SeoBlock, SEO),
+        (Seo, SEO),
     ]
     for field in schema.model_fields
 ]

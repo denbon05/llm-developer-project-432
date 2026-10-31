@@ -13,7 +13,7 @@ from app.core.errors import (
     UnsupportedFormatError,
 )
 from app.core.logging import get_logger
-from app.parsers.chunker import build_chunks
+from app.parsers.chunker import chunk_blocks
 from app.parsers.docx import parse_docx
 from app.parsers.normalizer import normalize_blocks
 from app.parsers.pdf import parse_pdf
@@ -155,7 +155,7 @@ def read_chunks(
         parsed.blocks,
         should_remove_running_headers=document_format == DocumentFormat.PDF,
     )
-    chunks = build_chunks(blocks)
+    chunks = chunk_blocks(blocks)
     # An indexed document always has a chunk: an empty card draft with no
     # explanation would look like a broken service.
     if not chunks:
