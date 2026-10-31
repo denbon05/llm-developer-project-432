@@ -523,3 +523,14 @@ def search_hybrid(
         fused.values(), key=lambda entry: (-entry["score"], entry["id"])
     )
     return ranked[:top_k]
+
+
+def get_chunks_by_ids(
+    conn: Any, chunk_ids: list[str]
+) -> dict[str, dict[str, Any]]:
+    """Return the acceptance chunks with these ids, by id"""
+    rows = conn.execute(
+        "SELECT id, doc_id, text, metadata, NULL FROM chunks WHERE id = ANY(%s)",
+        (chunk_ids,),
+    ).fetchall()
+    return {result["id"]: result for result in read_results(rows)}

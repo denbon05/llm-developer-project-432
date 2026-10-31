@@ -496,10 +496,8 @@ class SourceValidationError(UpstreamError):
 def find_missing_chunk_ids(chunk_ids: list[str]) -> set[str]:
     """Return the chunk ids the acceptance tables don't hold"""
     with db.connection() as conn:
-        rows = conn.execute(
-            "SELECT id FROM chunks WHERE id = ANY(%s)", (chunk_ids,)
-        ).fetchall()
-    return set(chunk_ids) - {row[0] for row in rows}
+        found = chunks_repository.get_chunks_by_ids(conn, chunk_ids)
+    return set(chunk_ids) - set(found)
 
 
 async def write_acceptance_card(
