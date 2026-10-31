@@ -243,4 +243,6 @@ def parse_to_chunks(
 ) -> list[Chunk]:
     """Return the file's chunks"""
     chunks, _ = read_chunks(DocumentFormat(document_format), content)
+    for chunk in chunks:
+        chunk.metadata["doc_id"] = document_id
     return chunks

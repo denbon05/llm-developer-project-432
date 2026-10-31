@@ -89,6 +89,11 @@ class Settings(BaseSettings):
         return self.temporal_address
 
     @property
+    def embed_dim(self) -> int:
+        """Return the embedding dimensions"""
+        return self.embedding_dimensions
+
+    @property
     def suspicious_chunk_limit(self) -> int:
         """Return the excluded chunks that exclude a document whole"""
         return self.injection_check_document_threshold

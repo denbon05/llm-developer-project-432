@@ -6,11 +6,13 @@ from uuid import UUID
 from pydantic import (
     AfterValidator,
     BaseModel,
+    BeforeValidator,
     ConfigDict,
     Field,
     computed_field,
     model_validator,
 )
+from pydantic.json_schema import SkipJsonSchema
 from pydantic_core import PydanticCustomError
 
 CARD_TITLE_MAX_LENGTH = 100
@@ -161,8 +163,17 @@ DraftStatus = Literal["awaiting_approval", "needs_review"]
 # leaves them out of the schema it sends.
 
 
+def require_every_property(schema: dict[str, Any]) -> None:
+    """Mark every property of the model's JSON schema required"""
+    schema["required"] = list(schema.get("properties", {}))
+
+
 class SupplierFacts(BaseModel):
     """Structured facts the extractor pulled from supplier text"""
+
+    # TODO(acceptance): missing_fields defaults for the external acceptance
+    # tests; the schema the model receives still requires it.
+    model_config = ConfigDict(json_schema_extra=require_every_property)
 
     product_name: NonBlankText = Field(
         description="Product name from the supplier text, or its product type"
@@ -171,10 +182,11 @@ class SupplierFacts(BaseModel):
         description="Characteristics as name-value pairs, only from the text"
     )
     missing_fields: list[str] = Field(
+        default=[],
         description=(
             "Characteristics a buyer of this product type expects on its card "
             "that the text does not contain (for example: warranty, color)"
-        )
+        ),
     )
 
     @model_validator(mode="after")
@@ -184,11 +196,6 @@ class SupplierFacts(BaseModel):
             self.characteristics, self.missing_fields
         )
         return self
-
-
-def require_every_property(schema: dict[str, Any]) -> None:
-    """Mark every property of the model's JSON schema required"""
-    schema["required"] = list(schema.get("properties", {}))
 
 
 class Seo(BaseModel):
@@ -214,6 +221,17 @@ class Seo(BaseModel):
     )
     keywords: TextList = Field(default=[], description="3-8 search keywords")
 
+    # TODO(acceptance): the names the external acceptance tests read
+    @property
+    def title(self) -> str:
+        """Return the meta title"""
+        return self.meta_title
+
+    @property
+    def description(self) -> str:
+        """Return the meta description"""
+        return self.meta_description
+
 
 class CardDraft(BaseModel):
     """A generated product card draft"""
@@ -237,15 +255,39 @@ class CardDraft(BaseModel):
         )
         return self
 
+    # TODO(acceptance): a confidence the external acceptance tests pass in.
+    # It can only lower the computed one, and the schema sent to the model
+    # leaves it out.
+    reported_confidence: SkipJsonSchema[float | None] = Field(
+        default=None, ge=0, le=1, alias="confidence", exclude=True
+    )
+
     # Computed, so it is not in the schema the generator receives, and a
     # value the model sends is ignored.
     @computed_field
     @property
     def confidence(self) -> float:
         """Return the share of needed characteristics the draft provides"""
-        return compute_confidence(
+        computed = compute_confidence(
             len(self.characteristics), len(self.missing_fields)
         )
+        if self.reported_confidence is None:
+            return computed
+        return min(computed, self.reported_confidence)
+
+    @model_validator(mode="after")
+    def keep_only_a_lower_confidence(self) -> Self:
+        """Drop a reported confidence that doesn't lower the computed one"""
+        # A draft read back from its own JSON carries its computed confidence.
+        computed = compute_confidence(
+            len(self.characteristics), len(self.missing_fields)
+        )
+        if (
+            self.reported_confidence is not None
+            and self.reported_confidence >= computed
+        ):
+            self.reported_confidence = None
+        return self
 
 
 class CitedValue(BaseModel):
@@ -305,10 +347,21 @@ class GroundedCardDraft(BaseModel):
         )
 
 
+# TODO(acceptance): the verdict names the external acceptance tests use
+VERDICT_SYNONYMS = {"approve": "pass", "regenerate": "revise"}
+
+
+def read_verdict(value: Any) -> Any:
+    """Return the verdict with a synonym replaced by our name"""
+    return (
+        VERDICT_SYNONYMS.get(value, value) if isinstance(value, str) else value
+    )
+
+
 class Critique(BaseModel):
     """The critic's verdict on a card draft and the issues it found"""
 
-    verdict: Verdict = Field(
+    verdict: Annotated[Verdict, BeforeValidator(read_verdict)] = Field(
         description="pass: the draft is ready; revise: it needs another round"
     )
     issues: list[str] = Field(
@@ -405,4 +458,6 @@ class SourceRef(BaseModel):
     """A reference to the chunk a value comes from"""
 
     chunk_id: str
+    doc_id: str = ""
     page: int | None = None
+    score: float | None = None

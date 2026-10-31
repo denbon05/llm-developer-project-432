@@ -171,12 +171,31 @@ def contains_pii(text: str) -> bool:
     return any(mask_texts([text]).counts.values())
 
 
-def mask_pii(text: str) -> tuple[str, dict[str, int]]:
-    """Return the text with its personal data masked, and the values masked
-    by category
+class PiiEntity(NamedTuple):
+    """A masked value's kind and its placeholder"""
+
+    kind: str
+    placeholder: str
+
+
+# The kind names the external tests use where they differ from ours
+ENTITY_KINDS = {
+    PersonalDataCategory.TAX_ID: "inn",
+    PersonalDataCategory.CARD_NUMBER: "card",
+}
+
+
+def mask_pii(text: str) -> tuple[str, list[PiiEntity]]:
+    """Return the text with its personal data masked, and each masked value's
+    kind and placeholder, in order of appearance
     """
-    masked = mask_texts([text])
-    [masked_text] = masked.texts
-    return masked_text, {
-        category: count for category, count in masked.counts.items() if count
-    }
+    [masked_text] = mask_texts([text]).texts
+    placeholders = dict.fromkeys(
+        match.group() for match in PLACEHOLDER_PATTERN.finditer(masked_text)
+    )
+    entities: list[PiiEntity] = []
+    for placeholder in placeholders:
+        category = PersonalDataCategory[placeholder[1:].rsplit("_", 1)[0]]
+        kind = ENTITY_KINDS.get(category, category.value)
+        entities.append(PiiEntity(kind, placeholder))
+    return masked_text, entities

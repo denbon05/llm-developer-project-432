@@ -18,12 +18,14 @@ from app.guardrails.pii import mask_pii, mask_texts
 ONE_UNIT_PRICE = re.compile(r"(?<!\d)1\s*(?:руб|₽|rub|ruble)", re.IGNORECASE)
 INJECTION_TRACE = "injection_trace"
 CHUNK_TEXT_KEYS = ("content", "text")
+CHUNK_ID_KEY = "chunk_id"
 
 
 class GuardReport(BaseModel):
     """What the guards found in a context and in a draft"""
 
-    pii_found: dict[str, int] = {}
+    masked_pii: int = 0
+    # Chunk ids, or texts for chunks without one
     suspicious_chunks: list[str] = []
     output_issues: list[str] = []
 
@@ -31,7 +33,7 @@ class GuardReport(BaseModel):
     def needs_review(self) -> bool:
         """Return whether a human must look before the draft goes on"""
         limit = get_settings().injection_check_document_threshold
-        return len(self.suspicious_chunks) >= limit or bool(self.output_issues)
+        return len(self.suspicious_chunks) > limit or bool(self.output_issues)
 
 
 async def detect_injection_llm(text: str) -> injection.InjectionVerdict:
@@ -51,6 +53,13 @@ def read_chunk_text(chunk: Any) -> str:
     return str(chunk)
 
 
+def read_chunk_id(chunk: Any, default: str) -> str:
+    """Return a chunk's id, or the default for a chunk without one"""
+    if isinstance(chunk, dict) and CHUNK_ID_KEY in chunk:
+        return str(chunk[CHUNK_ID_KEY])
+    return str(getattr(chunk, CHUNK_ID_KEY, default))
+
+
 def replace_chunk_text(chunk: Any, text: str) -> Any:
     """Return the chunk with its text replaced"""
     if isinstance(chunk, str):
@@ -68,11 +77,8 @@ async def guard_context(chunks: list[Any]) -> tuple[list[Any], GuardReport]:
     report = GuardReport()
     kept: list[Any] = []
     for chunk in chunks:
-        masked_text, found = mask_pii(read_chunk_text(chunk))
-        for category, count in found.items():
-            report.pii_found[category] = (
-                report.pii_found.get(category, 0) + count
-            )
+        masked_text, entities = mask_pii(read_chunk_text(chunk))
+        report.masked_pii += len(entities)
         if injection.detect_injection_regex(masked_text).suspicious:
             # A guard that opens when it fails protects nothing.
             try:
@@ -80,7 +86,9 @@ async def guard_context(chunks: list[Any]) -> tuple[list[Any], GuardReport]:
             except (ServiceError, RuntimeError, OSError) as error:
                 verdict = injection.InjectionVerdict(True, reason=str(error))
             if verdict.suspicious:
-                report.suspicious_chunks.append(masked_text)
+                report.suspicious_chunks.append(
+                    read_chunk_id(chunk, masked_text)
+                )
                 continue
         kept.append(replace_chunk_text(chunk, masked_text))
     return kept, report

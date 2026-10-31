@@ -5,12 +5,21 @@ from pydantic import BaseModel, Field, ValidationError, create_model
 from pydantic_core import ErrorDetails
 
 from app.agents.prompts import (
+    GENERATOR_INSTRUCTIONS,
     build_field_fix_messages,
     build_output_repair_messages,
 )
+from app.core.config import get_settings
 from app.core.errors import UpstreamError
 from app.core.logging import get_logger
-from app.llm.client import Agent, CallParams, ChatMessage, run_agent
+from app.llm.client import (
+    Agent,
+    CallParams,
+    CallPurpose,
+    ChatMessage,
+    run_agent,
+)
+from app.schemas.cards import CardDraft, DraftStatus
 from app.services.json_utils import JsonReadError, read_json_object
 
 # Output repairs and field fixes together, after the first call
@@ -160,3 +169,58 @@ async def complete_structured[ModelT: BaseModel](
             raise InvalidModelOutputError(response_schema, errors)
         repairs_counter += 1
         log_fix_request(response_schema, fields)
+
+
+# TODO(acceptance): the generator API the external acceptance tests call.
+# The product generates through services.pipeline; these wrap the same
+# repair loop and field fix.
+CardValidationError = InvalidModelOutputError
+
+
+def build_card_messages(facts: str) -> list[ChatMessage]:
+    """Return the generator's messages for these supplier facts"""
+    return [
+        ChatMessage(role="system", content=GENERATOR_INSTRUCTIONS),
+        ChatMessage(role="user", content=facts),
+    ]
+
+
+async def validate_or_retry(facts: str) -> CardDraft:
+    """Return a card draft for the facts, repaired while the budget lasts"""
+    from app.services.pipeline import build_generate_params
+
+    return await complete_structured(
+        build_card_messages(facts),
+        params=build_generate_params(),
+        response_schema=CardDraft,
+    )
+
+
+async def regenerate_field(
+    card: CardDraft, field: str, reason: str
+) -> CardDraft:
+    """Return the card with only this field written again"""
+    from app.services.pipeline import build_generate_params
+
+    shown = card.model_dump_json(indent=2)
+    request = build_field_fix_messages(
+        build_card_messages(shown), shown, [f"{field}: {reason}"], [field]
+    )
+    text = await run_agent(
+        Agent(
+            name=CallPurpose.GENERATE,
+            messages=request,
+            params=build_generate_params(),
+            response_schema=build_fix_schema(CardDraft, [field]),
+        ),
+        request[-1].content,
+    )
+    reply = read_json_object(text)
+    return CardDraft.model_validate(card.model_dump() | {field: reply[field]})
+
+
+def confidence_gate(card: CardDraft) -> DraftStatus:
+    """Return the status the card's confidence alone sends it to"""
+    if card.confidence < get_settings().card_confidence_threshold:
+        return "needs_review"
+    return "awaiting_approval"

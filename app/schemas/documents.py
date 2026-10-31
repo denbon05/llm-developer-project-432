@@ -11,6 +11,8 @@ SEARCH_DEFAULT_TOP_K = 5
 SEARCH_MAX_TOP_K = 50
 # TODO(acceptance): joins a table row's cells in a block's content
 TABLE_CELL_SEPARATOR = " | "
+TEXT_BLOCK_KIND = "text"
+TABLE_BLOCK_KIND = "table"
 
 
 class DocumentFormat(StrEnum):
@@ -95,11 +97,16 @@ class TextBlock(BaseModel):
     section: str | None
     lines: list[str]
 
-    # TODO(acceptance): the text the external acceptance tests read
+    # TODO(acceptance): the text and kind the external acceptance tests read
     @property
     def content(self) -> str:
         """Return the block's lines as one text"""
         return "\n".join(self.lines)
+
+    @property
+    def kind(self) -> str:
+        """Return the block's kind"""
+        return TEXT_BLOCK_KIND
 
 
 class TableRow(BaseModel):
@@ -117,7 +124,12 @@ class TableBlock(BaseModel):
     headers: list[str]
     rows: list[TableRow]
 
-    # TODO(acceptance): the text the external acceptance tests read
+    # TODO(acceptance): the text and kind the external acceptance tests read
+    @property
+    def kind(self) -> str:
+        """Return the block's kind"""
+        return TABLE_BLOCK_KIND
+
     @property
     def content(self) -> str:
         """Return the headers and rows as lines of cells"""
@@ -153,6 +165,8 @@ class ChunkMetadata(TypedDict):
     row: NotRequired[int]
     sku: NotRequired[str]
     brand: NotRequired[str]
+    # TODO(acceptance): set only for the external acceptance tests
+    doc_id: NotRequired[str]
 
 
 class Chunk(BaseModel):
@@ -176,6 +190,10 @@ class Chunk(BaseModel):
     def page(self) -> int:
         """Return the page the chunk sits on"""
         return self.metadata["page"]
+
+    def __getitem__(self, key: str) -> Any:
+        """Return the field by name, as a mapping would"""
+        return getattr(self, key)
 
 
 class ChunkText(NamedTuple):

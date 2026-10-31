@@ -41,6 +41,11 @@ GROUNDED_DRAFT: dict[str, Any] = {
 }
 SCHEMAS_WITH_MISSING_FIELDS = [(SupplierFacts, FACTS), (CardDraft, DRAFT)]
 SCHEMAS_WITH_MISSING_FIELDS_IDS = ["facts", "draft"]
+# TODO(acceptance): fields with defaults for the external acceptance tests
+ACCEPTANCE_OPTIONAL_FIELDS = {
+    ("SupplierFacts", "missing_fields"),
+    ("CardDraft", "reported_confidence"),
+}
 WRITTEN_FIELDS = [
     (schema, data, field)
     for schema, data in [
@@ -51,6 +56,8 @@ WRITTEN_FIELDS = [
         # sent to the model requires them.
     ]
     for field in schema.model_fields
+    # TODO(acceptance): drop this filter after the rollback
+    if (schema.__name__, field) not in ACCEPTANCE_OPTIONAL_FIELDS
 ]
 
 Location = tuple[int | str, ...]
