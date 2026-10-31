@@ -4,6 +4,7 @@ from uuid import UUID
 import asyncpg
 
 from app.core import db
+from app.core.config import get_settings
 from app.schemas.documents import (
     Chunk,
     ChunkText,
@@ -408,3 +409,15 @@ async def search_hybrid(
             ),
         )
     return [to_search_result(row) for row in rows]
+
+
+# TODO(acceptance): the query embedding the external acceptance tests
+# substitute in this module
+def embed_query(text: str) -> list[float]:
+    """Return the query's vector, computed synchronously"""
+    from app.rag import embedder
+
+    [vector] = embedder.compute_vectors(
+        [f"{get_settings().embedding_query_prefix}{text}"]
+    )
+    return vector

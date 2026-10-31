@@ -1,5 +1,6 @@
+import re
 from pathlib import PurePath
-from typing import NamedTuple, NoReturn
+from typing import Any, NamedTuple
 from uuid import UUID
 
 from tokenizers import Tokenizer
@@ -191,13 +192,44 @@ def assemble_context(chunks: list[ContextChunk]) -> AssembledContext:
     )
 
 
-# TODO(acceptance): placeholders for the names the external acceptance tests
-# import; their failures show what the tests expect.
-def build_context(*args: object, **kwargs: object) -> NoReturn:
-    """Raise NotImplementedError"""
-    raise NotImplementedError
+# TODO(acceptance): the context API the external acceptance tests call, over
+# chunk mappings: each chunk under a header naming its id and place, within
+# a budget of characters.
+DEFAULT_CONTEXT_MAX_CHARS = 12_000
+CONTEXT_HEADER = re.compile(r"^\[([^\]]+)\]", re.MULTILINE)
 
 
-def context_chunk_ids(*args: object, **kwargs: object) -> NoReturn:
-    """Raise NotImplementedError"""
-    raise NotImplementedError
+def describe_chunk_place(chunk: dict[str, Any]) -> str:
+    """Return the chunk's file, page and section, those it has"""
+    metadata = chunk.get("metadata") or {}
+    parts = [
+        str(part)
+        for part in (
+            chunk.get("filename"),
+            f"p. {metadata['page']}" if metadata.get("page") else None,
+            metadata.get("section"),
+        )
+        if part
+    ]
+    return ", ".join(parts)
+
+
+def build_context(
+    chunks: list[dict[str, Any]], max_chars: int = DEFAULT_CONTEXT_MAX_CHARS
+) -> str:
+    """Return the chunks under their headers, as many as fit the budget"""
+    parts: list[str] = []
+    used = 0
+    for chunk in chunks:
+        header = f"[{chunk['chunk_id']}] {describe_chunk_place(chunk)}"
+        part = f"{header}\n{chunk['text']}"
+        if used + len(part) > max_chars:
+            break
+        parts.append(part)
+        used += len(part)
+    return "\n\n".join(parts)
+
+
+def context_chunk_ids(context: str) -> list[str]:
+    """Return the ids of the chunks in a context, in order"""
+    return CONTEXT_HEADER.findall(context)

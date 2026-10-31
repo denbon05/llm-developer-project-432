@@ -3,6 +3,7 @@ from collections import Counter
 from typing import NamedTuple
 from uuid import UUID
 
+import app.llm.client
 from app.agents.prompts import (
     CITATION_CHUNK_MISSING_ISSUE,
     CITATION_NOT_IN_CONTEXT_ISSUE,
@@ -84,6 +85,9 @@ STANDARD_FIELDS = {
 }
 
 logger = get_logger(__name__)
+# TODO(acceptance): the name the external acceptance tests substitute; the
+# calls themselves go through services.structured.
+run_agent = app.llm.client.run_agent
 
 
 class DocumentsNotFoundError(NotFoundError):

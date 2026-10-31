@@ -13,6 +13,7 @@ from app.core.config import get_settings
 from app.core.errors import UpstreamError
 from app.core.logging import get_logger
 from app.llm.client import (
+    AGENT_NAMES,
     Agent,
     CallParams,
     CallPurpose,
@@ -120,7 +121,7 @@ async def complete_structured[ModelT: BaseModel](
         # tests substitute; the prompt is the request's last message.
         text = await run_agent(
             Agent(
-                name=params.purpose,
+                name=AGENT_NAMES[params.purpose],
                 messages=request,
                 params=params,
                 response_schema=(
@@ -211,7 +212,7 @@ async def regenerate_field(
     )
     text = await run_agent(
         Agent(
-            name=CallPurpose.GENERATE,
+            name=AGENT_NAMES[CallPurpose.GENERATE],
             messages=request,
             params=build_generate_params(),
             response_schema=build_fix_schema(CardDraft, [field]),

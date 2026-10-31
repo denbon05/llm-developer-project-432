@@ -317,6 +317,13 @@ async def complete(
 # retries itself and raises LlmUnavailableError or LlmRequestError, which
 # _retryable doesn't retry.
 RUN_AGENT_MAX_RETRIES = 2
+AGENT_NAMES = {
+    CallPurpose.EXTRACT: "Extractor",
+    CallPurpose.GENERATE: "Generator",
+    CallPurpose.CRITIQUE: "Critic",
+    CallPurpose.DETECT_INJECTION: "InjectionDetector",
+    CallPurpose.JUDGE: "Judge",
+}
 
 
 class Agent(BaseModel):
