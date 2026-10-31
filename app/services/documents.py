@@ -235,3 +235,7 @@ async def embed_document(document_id: UUID) -> int:
         duration_ms=round((time.perf_counter() - started) * MS_PER_S),
     )
     return chunk_count
+
+
+# TODO(acceptance): the name the external acceptance tests import.
+parse_to_chunks = read_chunks
