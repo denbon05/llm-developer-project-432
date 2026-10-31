@@ -5,7 +5,7 @@
 Vector search always returns the nearest chunks, even for a question the
 documents don't answer: "How do I renew my car insurance?" finds a warranty
 section at a similarity of 0.794. So search
-([06](../specs/06-embeddings-and-search.md)) drops vector results whose cosine
+([search](../specs/search.md#threshold)) drops vector results whose cosine
 similarity is below `SEARCH_MIN_SIMILARITY`, 0.795. The value is calibrated on
 the evaluation set with `intfloat/multilingual-e5-base`: above the highest
 unrelated query (0.794, English) and below the lowest answer to a question

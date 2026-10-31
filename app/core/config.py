@@ -74,7 +74,7 @@ class Settings(BaseSettings):
     # fastembed defaults to the temp directory, which the OS clears
     embedding_cache_dir: Path = REPOSITORY_ROOT / ".cache" / "models"
     # Calibrated on the search evaluation: above every noise query, below
-    # every answer (docs/specs/06-embeddings-and-search.md#calibration)
+    # every answer (docs/adr/0008-calibrated-similarity-threshold.md)
     search_min_similarity: float = Field(default=0.795, ge=-1, le=1)
 
     model_config = SettingsConfigDict(

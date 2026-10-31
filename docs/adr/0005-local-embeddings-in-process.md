@@ -30,7 +30,8 @@ to ONNX through ONNX Runtime. The default model is
 - **The model downloads on first use**, about 1.1 GB, into
   `EMBEDDING_CACHE_DIR`. The worker loads it at startup, so a missing model
   stops the worker rather than failing documents.
-- **The API never loads the model.** Search runs in the worker (07) and in
+- **The API never loads the model.** Search runs in the worker
+  ([grounded generation](../specs/grounded-generation.md)) and in
   operator commands.
 - **e5-base is outside fastembed's catalog.** The embedder registers such
   models by a general convention: averaged token vectors, `onnx/model.onnx`.
