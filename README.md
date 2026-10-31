@@ -17,15 +17,27 @@ A Hexlet learning project: https://ru.hexlet.io/programs/llm-developer
 TODO(acceptance): roll back once the project is accepted, in this order:
 1. Delete data/ (the starter supplier documents, checked byte for byte) and
    the starter set's reports, evals/reports/generation_starter_*.md.
-2. Undo every spot that `git grep "TODO(acceptance)"` finds: the names and
-   placeholders the external tests import, and the starter set's evaluation,
-   so that make eval-generation runs evals/goldens/cards.json on
-   evals/datasets/ again.
-3. Name the Russian copies explicitly, as the English ones carry _en:
+2. Revert the commit that adapted the code to the external acceptance
+   tests' API (subject "test: adapt to the acceptance tests' API"). It holds
+   run_agent and its facade, the synchronous db.connection() with psycopg
+   (a development dependency) and the acceptance schema, the guardrails
+   package API, parse_* and parse_to_chunks, the search_vector/search_fts/
+   search_hybrid/get_chunks_by_ids and run_rag_pipeline functions, the
+   60-character supplier-text title, SEO and missing-field defaults, a given
+   confidence, the approve/regenerate verdicts and the skipped or adjusted
+   tests. In a development database also run
+   `DROP SCHEMA acceptance CASCADE;`. Decide whether to keep the names it
+   introduced for ours (read_pdf/read_docx/read_xlsx, preview_card,
+   search_by_rank_fusion) or rename them back.
+3. Undo every spot that `git grep "TODO(acceptance)"` still finds: the
+   starter set's evaluation, so that make eval-generation runs
+   evals/goldens/cards.json on evals/datasets/ again, and anything an
+   adjustment after the revert added.
+4. Name the Russian copies explicitly, as the English ones carry _en:
    coffee_passport_cfe_1000.pdf becomes coffee_passport_cfe_1000_ru.pdf in
    evals/datasets/ and tests/fixtures/documents/, with every reference to
    it (goldens, tests, specs). Then run make check.
-4. Rerun make eval-search, make eval-generation and make eval-generation
+5. Rerun make eval-search, make eval-generation and make eval-generation
    full=1: the committed reports predate the standard missing fields, the
    source-label rule of the document generator, the kettle-1700-en case and
    the grouped Cases table. kettle_manual_en.pdf joined evals/datasets/, so
@@ -34,7 +46,7 @@ TODO(acceptance): roll back once the project is accepted, in this order:
    matched, 4/19 truly missing listed): on the starter set those two changes
    lifted matched from 0.56 to 0.70 and truly missing listed from 1/5 to
    5/5; if our set drops instead, look at the prompt rule first.
-5. Update evals/reports/README.md with the new numbers, then delete this
+6. Update evals/reports/README.md with the new numbers, then delete this
    comment.
 Keep: make setup, the Seo and chunk_blocks names, the _en suffix of the
 English copies, ADR 0008, the client-facing failure messages, the standard
