@@ -284,7 +284,7 @@ limits of [07](07-grounded-generation.md#retrieval):
 ### Leak check
 
 - **Fields:** every text field of a draft: title, description, benefits,
-  characteristic names and values, the SEO block and missing fields.
+  characteristic names and values, the SEO and missing fields.
 - **Findings:** personal data, a placeholder copied from the sources, and
   any injection pattern. A finding names the field and its kind:
   `{"field": "description", "kind": "phone"}`. The kind is a personal-data

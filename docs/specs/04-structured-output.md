@@ -18,7 +18,7 @@ never filled.
 ## Requirements
 
 - **OUT-1 — Card contract:** a card draft carries a title, description,
-  characteristics, benefits, an SEO block, missing fields and a confidence.
+  characteristics, benefits, SEO, missing fields and a confidence.
   Code enforces the length limits and keeps empty values and contradictory
   lists out of supplier facts and card drafts.
 - **OUT-2 — Tolerant reading:** a reply is accepted as plain JSON, JSON in a
@@ -257,7 +257,7 @@ llm_call_completed model=… latency_s=… …
   type expects on its card. When the text names no product, the product type
   is the `product_name`.
 - **Generator:** the title is at most 100 characters and names the product
-  type and at least one key specification; the SEO block has a meta title of
+  type and at least one key specification; the SEO has a meta title of
   at most 60 characters, a meta description of at most 160 and 3–8 keywords;
   `missing_fields` lists every missing field from the facts, and none of them
   gets a value. Revisions work as before.
@@ -313,7 +313,7 @@ llm_call_completed model=… latency_s=… …
 
 - `POST /cards` answers `200` with `status` added. Its `502` carries the
   errors when repairs run out.
-- `GET /jobs/{id}` returns the draft with its SEO block, missing fields and
+- `GET /jobs/{id}` returns the draft with its SEO, missing fields and
   confidence. No endpoint is added.
 - `jobs.result` (`jsonb`) stores the whole draft, confidence included. No
   migration.

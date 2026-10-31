@@ -229,6 +229,7 @@ def test_totals_sum_counts_instead_of_averaging_ratios() -> None:
         matched_count=10,
         wrong_value_count=1,
         correct_citation_count=10,
+        checked_citation_count=11,
         # Both drafts cite, but only the first cites every value correctly.
         citing_draft_count=2,
         correct_citing_draft_count=1,

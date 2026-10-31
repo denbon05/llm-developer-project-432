@@ -1,3 +1,4 @@
+import re
 from collections import Counter
 from typing import NamedTuple
 from uuid import UUID
@@ -51,6 +52,36 @@ NO_SIMILARITY_THRESHOLD = -1.0
 LIST_SEPARATOR = ", "
 NOT_IN_CONTEXT = "not_in_context"
 CHUNK_MISSING = "chunk_missing"
+CYRILLIC_LETTER = re.compile(r"[а-яё]", re.IGNORECASE)
+LATIN_LETTER = re.compile(r"[a-z]", re.IGNORECASE)
+RUSSIAN = "ru"
+ENGLISH = "en"
+
+
+class StandardField(NamedTuple):
+    """A field a buyer expects on any card, and the stems that name it"""
+
+    name: str
+    stems: tuple[str, ...]
+
+
+# The model often leaves these missing fields unlisted, which overstates a
+# draft's confidence. Named in the draft's language; any other language
+# gets English.
+STANDARD_FIELDS = {
+    RUSSIAN: (
+        StandardField("Гарантия", ("гаранти",)),
+        StandardField("Цвет", ("цвет",)),
+        StandardField("Страна-производитель", ("страна",)),
+        StandardField("Комплектация", ("комплект",)),
+    ),
+    ENGLISH: (
+        StandardField("Warranty", ("warrant",)),
+        StandardField("Color", ("color", "colour")),
+        StandardField("Country of origin", ("country", "made in")),
+        StandardField("Package contents", ("package", "in the box")),
+    ),
+}
 
 logger = get_logger(__name__)
 
@@ -287,13 +318,55 @@ async def generate(
 ) -> GroundedCardDraft:
     """Return a card draft written from the job's sources and any issues"""
     sources = await read_sources(job_id)
-    return await complete_structured(
+    draft = await complete_structured(
         build_grounded_generator_messages(
             product_line, sources, feedback, previous_draft
         ),
         params=build_generate_params(),
         response_schema=GroundedCardDraft,
     )
+    standard_missing_fields = find_standard_missing_fields(
+        draft, [source.text for source in sources]
+    )
+    if not standard_missing_fields:
+        return draft
+    logger.info(
+        "standard_missing_fields_added",
+        job_id=str(job_id),
+        fields=standard_missing_fields,
+    )
+    return draft.model_copy(
+        update={
+            "missing_fields": [*draft.missing_fields, *standard_missing_fields]
+        }
+    )
+
+
+def detect_language(text: str) -> str:
+    """Return ru for text with more Cyrillic letters than Latin, else en"""
+    cyrillic_count = len(CYRILLIC_LETTER.findall(text))
+    return (
+        RUSSIAN if cyrillic_count > len(LATIN_LETTER.findall(text)) else ENGLISH
+    )
+
+
+def find_standard_missing_fields(
+    draft: GroundedCardDraft, source_texts: list[str]
+) -> list[str]:
+    """Return the standard fields that neither the draft nor any source
+    names
+    """
+    # A field a source names is the model's omission, not a missing field;
+    # listing it as missing would be wrong, so that is left to the critic.
+    named = " ".join(
+        [*draft.characteristics, *draft.missing_fields, *source_texts]
+    ).casefold()
+    language = detect_language(" ".join([draft.title, *draft.characteristics]))
+    return [
+        field.name
+        for field in STANDARD_FIELDS[language]
+        if not any(stem in named for stem in field.stems)
+    ]
 
 
 async def verify_citations(job_id: UUID, draft: GroundedCardDraft) -> list[str]:

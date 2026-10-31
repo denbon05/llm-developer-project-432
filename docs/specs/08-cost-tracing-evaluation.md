@@ -47,8 +47,11 @@ report file, so that a change can be compared before and after.
 - **TRC-4 — One log format:** lines from the standard library loggers
   (uvicorn, Temporal) are rendered in the same format as the application's
   own lines.
-- **EVL-1 — Reference set:** `evals/goldens/cards.json` holds eight reference
-  cases, three of which make up the subset.
+- **EVL-1 — Reference set:** `evals/goldens/cards.json` holds nine reference
+  cases, four of which make up the subset. A case may list texts its draft
+  must not contain (an injection's payload, personal data that must be
+  masked), and a characteristic may give a quote its cited chunk must
+  contain.
 - **EVL-2 — Evaluation run:** `make eval-generation` runs the subset, and
   `make eval-generation full=1` runs every case. The run goes through the
   running API and worker, prints a table of cases and totals, and writes a
@@ -303,7 +306,7 @@ CREATE INDEX llm_calls_created_at_idx ON llm_calls (created_at);
 
 ```json
 {
-  "subset": ["fan-40-en", "blender-800-ru", "coffee-1000-ru"],
+  "subset": ["fan-40-en", "blender-800-ru", "coffee-1000-ru", "kettle-1700-en"],
   "cases": [
     {
       "id": "fan-40-en",
@@ -410,7 +413,7 @@ result and goes into the report.
    - each benefit;
    - each sentence of the description.
 
-   The SEO block is left out, because it restates the description. The judge
+   The SEO is left out, because it restates the description. The judge
    receives the sources in the generator's `<source>` format and the numbered
    claims, never the reference set. For each claim it answers `supported`
    (true or false) with a one-sentence reason.

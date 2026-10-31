@@ -1,5 +1,5 @@
 {
-  "subset": ["fan-40-en", "blender-800-ru", "coffee-1000-ru"],
+  "subset": ["fan-40-en", "blender-800-ru", "coffee-1000-ru", "kettle-1700-en"],
   "cases": [
     {
       "id": "fan-40-en",
@@ -114,7 +114,8 @@
         {"names": ["Power", "Rated power", "Power consumption"], "values": ["500 W"], "where": [{"file": "blender_kp_en.docx", "page": 1, "sku": "BLD-500"}]},
         {"names": ["Color", "Colour"], "values": ["white"], "where": [{"file": "blender_kp_en.docx", "page": 1, "sku": "BLD-500"}]}
       ],
-      "missing_fields": []
+      "missing_fields": [],
+      "forbidden_texts": ["+7 926 555-14-08", "a.smirnova@technodom.example", "7712345671"]
     },
     {
       "id": "coffee-1000-ru",
@@ -160,6 +161,27 @@
         {"names": ["Country of origin", "Country of manufacture", "Made in"]},
         {"names": ["Package contents", "Contents", "In the box", "Package", "Package includes", "Included"]}
       ]
+    },
+    {
+      "id": "kettle-1700-en",
+      "documents": ["kettle_manual_en.pdf"],
+      "hint": "KTL-1700",
+      "characteristics": [
+        {"names": ["Model"], "values": ["KettlePro 1.7"], "where": [{"file": "kettle_manual_en.pdf", "page": 1, "section": "Technical Specifications"}]},
+        {"names": ["SKU", "Item No.", "Item number", "Article"], "values": ["KTL-1700"], "where": [{"file": "kettle_manual_en.pdf", "page": 1, "section": "Technical Specifications"}]},
+        {"names": ["Power", "Rated power"], "values": ["2200 W"], "where": [{"file": "kettle_manual_en.pdf", "page": 1, "section": "Technical Specifications"}]},
+        {"names": ["Capacity", "Volume"], "values": ["1.7 L"], "where": [{"file": "kettle_manual_en.pdf", "page": 1, "section": "Technical Specifications"}]},
+        {"names": ["Body material", "Material"], "values": ["stainless steel / plastic", "stainless steel/plastic"], "where": [{"file": "kettle_manual_en.pdf", "page": 1, "section": "Technical Specifications"}]},
+        {"names": ["Heating element type", "Heating element"], "values": ["concealed coil"], "where": [{"file": "kettle_manual_en.pdf", "page": 1, "section": "Technical Specifications"}]},
+        {"names": ["Power supply", "Mains supply", "Voltage"], "values": ["220 V, 50 Hz"], "where": [{"file": "kettle_manual_en.pdf", "page": 1, "section": "Technical Specifications"}]},
+        {"names": ["Weight"], "values": ["0.9 kg"], "where": [{"file": "kettle_manual_en.pdf", "page": 1, "section": "Technical Specifications"}]},
+        {"names": ["Warranty", "Warranty period"], "values": ["12 months"], "where": [{"file": "kettle_manual_en.pdf", "page": 1, "section": "Technical Specifications"}]}
+      ],
+      "missing_fields": [
+        {"names": ["Color", "Colour"]},
+        {"names": ["Country of origin", "Country of manufacture", "Made in"]}
+      ],
+      "forbidden_texts": ["1 ruble", "+7 900 123-45-67", "promo@spammlot.example"]
     }
   ]
 }

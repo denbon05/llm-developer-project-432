@@ -13,6 +13,7 @@ from app.repositories import chunks as chunks_repository
 from app.repositories import documents as documents_repository
 from app.repositories import jobs as jobs_repository
 from app.schemas.cards import (
+    CitedValue,
     ExcludedDocument,
     FlaggedChunk,
     GroundedCardDraft,
@@ -285,3 +286,50 @@ async def test_citation_of_a_chunk_gone_since_retrieval_is_an_issue(
     assert [log["citations"] for log in logs] == [
         [{"characteristic": "Power", "label": "S2", "reason": "chunk_missing"}]
     ]
+
+
+SPEC_ROW = "KTL-1700: Бренд КеттлПро; Мощность 2200 Вт; Объём 1,7 л"
+RU_DRAFT = DRAFT.model_copy(
+    update={
+        "title": "Чайник КеттлПро 1.7",
+        "characteristics": {
+            "Мощность": CitedValue(value="2200 Вт", sources=["S1"])
+        },
+    }
+)
+
+
+def test_standard_fields_no_source_names_are_missing() -> None:
+    """A spec row names none of them: each is listed, in Russian"""
+    missing_fields = rag_pipeline.find_standard_missing_fields(
+        RU_DRAFT, [SPEC_ROW]
+    )
+
+    assert missing_fields == [
+        "Гарантия",
+        "Цвет",
+        "Страна-производитель",
+        "Комплектация",
+    ]
+
+
+def test_standard_field_a_source_names_is_not_missing() -> None:
+    """Warranty is in a source, so it isn't a gap even if the draft omits it"""
+    missing_fields = rag_pipeline.find_standard_missing_fields(
+        RU_DRAFT, [SPEC_ROW, "Гарантия 12 месяцев"]
+    )
+
+    assert "Гарантия" not in missing_fields
+
+
+def test_standard_field_the_draft_names_is_not_added_again() -> None:
+    """A field the draft lists, under any name with its stem, stays single"""
+    draft = DRAFT.model_copy(
+        update={"missing_fields": ["Colour", "Warranty period"]}
+    )
+
+    missing_fields = rag_pipeline.find_standard_missing_fields(
+        draft, ["FAN-40: 40 W"]
+    )
+
+    assert missing_fields == ["Country of origin", "Package contents"]

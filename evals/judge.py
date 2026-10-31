@@ -60,7 +60,7 @@ def split_into_claims(draft: GroundedCardDraft) -> list[Claim]:
     """
     # Code numbers the claims: a judge listing them itself would count them
     # differently between runs and move the metric with no change in the
-    # draft. The SEO block restates the description, so it is left out.
+    # draft. The SEO restates the description, so it is left out.
     sentences = SENTENCE_END.split(draft.description.strip())
     return [
         Claim("title", draft.title),

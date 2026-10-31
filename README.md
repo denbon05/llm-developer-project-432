@@ -21,9 +21,15 @@ TODO(acceptance): roll back once the project is accepted, in this order:
    placeholders the external tests import, and the starter set's evaluation,
    so that make eval-generation runs evals/goldens/cards.json on
    evals/datasets/ again.
-3. Run make check, then delete this comment.
+3. Run make check.
+4. Rerun make eval-search, make eval-generation and make eval-generation
+   full=1: the committed reports predate the standard missing fields and the
+   kettle-1700-en case. kettle_manual_en.pdf joined evals/datasets/, so if
+   the search report's threshold window moved, recalibrate (ADR 0008).
+5. Delete this comment.
 Keep: make setup, the Seo and chunk_blocks names, the _en suffix of the
-English copies, ADR 0008 and the client-facing failure messages.
+English copies, ADR 0008, the client-facing failure messages, the standard
+missing fields, and the forbidden-text and quote checks of the evaluation.
 -->
 
 
@@ -183,9 +189,13 @@ ledger and the log events.
 ### Evaluation
 
 ```bash
-make eval-generation          # the subset: 3 reference cases
+make eval-generation          # the subset: 2 cases
 make eval-generation full=1   # every case
 ```
+
+<!-- TODO(acceptance): both run the starter set in data/ and write
+evals/reports/generation_starter_<subset|full>.md. After the rollback they
+run evals/goldens/cards.json on evals/datasets/: the subset is 4 cases. -->
 
 It needs the API, the worker and the model server.
 [Spec 08](docs/specs/08-cost-tracing-evaluation.md#evaluation) describes the

@@ -444,6 +444,11 @@ Characteristic "Power" cites S3, but that source is no longer available. Cite an
   - a characteristic a buyer of this product type expects that no source
     states goes to `missing_fields`, never gets a value and never gets a
     placeholder. This is the extractor's rule, now the generator's;
+  - code adds a standard field (warranty, colour, country of origin,
+    package contents) to `missing_fields` when neither the draft nor any
+    source names it, in the draft's language (Russian or English). The
+    model often leaves these unlisted, which overstated confidence; a field
+    a source names is left to the critic;
   - write in the main language of the sources.
 - Title, description, benefits, SEO and their limits are as in
   [04](04-structured-output.md#prompts).

@@ -187,7 +187,7 @@ async def test_unreadable_field_fix_reply_repeats_the_field_fix(
 async def test_nested_error_asks_for_its_top_level_field(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """An error inside the SEO block asks for the whole SEO block"""
+    """An error inside the SEO asks for the whole SEO"""
     seo_without_keywords = {**SEO}
     del seo_without_keywords["keywords"]
     calls = stub_model(
