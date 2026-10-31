@@ -8,7 +8,7 @@ infra:
 down:
 	docker compose down
 
-install:
+setup:
 	uv sync --frozen
 
 # The app logs each request with its id, which replaces the access log.
