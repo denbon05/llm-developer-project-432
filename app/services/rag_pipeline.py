@@ -1,27 +1,37 @@
 import re
 from collections import Counter
-from typing import NamedTuple
+from typing import Any, NamedTuple
 from uuid import UUID
 
 import app.llm.client
 from app.agents.prompts import (
     CITATION_CHUNK_MISSING_ISSUE,
     CITATION_NOT_IN_CONTEXT_ISSUE,
+    GENERATOR_INSTRUCTIONS,
     build_grounded_critic_messages,
     build_grounded_generator_messages,
 )
 from app.core import db
 from app.core.config import get_settings
-from app.core.errors import ConflictError, NotFoundError, ServiceError
+from app.core.errors import (
+    ConflictError,
+    NotFoundError,
+    ServiceError,
+    UpstreamError,
+)
 from app.core.logging import get_logger
+from app.guardrails import GuardReport as AcceptanceGuardReport
+from app.guardrails import guard_output
 from app.guardrails.injection import detect_injection, find_injection_patterns
 from app.guardrails.pii import mask_texts
+from app.llm.client import AGENT_NAMES, Agent, CallPurpose, ChatMessage
 from app.rag import retrieval
 from app.rag.context import (
     ContextChunk,
     assemble_context,
     build_context,
     choose_title,
+    context_chunk_ids,
     filter_chunks,
     find_naming_documents,
 )
@@ -30,11 +40,13 @@ from app.repositories import documents as documents_repository
 from app.repositories import jobs as jobs_repository
 from app.schemas.cards import (
     SOURCE_LABEL_PREFIX,
+    CardDraft,
     Critique,
     ExcludedDocument,
     FlaggedChunk,
     GroundedCardDraft,
     InjectionVerdict,
+    SourceRef,
 )
 from app.schemas.documents import (
     DocumentStatus,
@@ -44,8 +56,15 @@ from app.schemas.documents import (
 )
 from app.schemas.jobs import Source
 from app.services import jobs as jobs_service
-from app.services.pipeline import build_critique_params, build_generate_params
-from app.services.structured import complete_structured
+from app.services.json_utils import read_json_object
+from app.services.pipeline import (
+    TEST_DONE,
+    TEST_REJECTED,
+    TEST_VERDICTS,
+    build_critique_params,
+    build_generate_params,
+)
+from app.services.structured import complete_structured, confidence_gate
 
 # Hybrid search candidates the context is assembled from
 CANDIDATE_COUNT = 20
@@ -447,3 +466,116 @@ async def retrieve_context_async(
             for result in results
         ]
     )
+
+
+# TODO(acceptance): the document pipeline the external acceptance tests run:
+# their card cites chunk ids in "sources", and they substitute run_agent and
+# retrieve_context_async in this module. The product's document jobs run
+# through the workflow instead.
+MAX_SOURCE_ATTEMPTS = 3
+SOURCES_KEY = "sources"
+ACCEPTANCE_GENERATOR_NOTE = (
+    "List the ids of the chunks you used, from the [id] headers, in "
+    '"sources": [{"chunk_id": "..."}].'
+)
+ACCEPTANCE_CRITIC_INSTRUCTIONS = (
+    "Check the product card draft against the sources. Return only a JSON "
+    'object: {"verdict": "pass" or "revise", "issues": [...]}.'
+)
+
+
+class SourceValidationError(UpstreamError):
+    """Raised when the card keeps citing chunks outside its context"""
+
+    message = "the card cites sources outside its context"
+
+
+def find_missing_chunk_ids(chunk_ids: list[str]) -> set[str]:
+    """Return the chunk ids the acceptance tables don't hold"""
+    with db.connection() as conn:
+        rows = conn.execute(
+            "SELECT id FROM chunks WHERE id = ANY(%s)", (chunk_ids,)
+        ).fetchall()
+    return set(chunk_ids) - {row[0] for row in rows}
+
+
+async def write_acceptance_card(
+    query: str, context: str
+) -> tuple[dict[str, Any], int]:
+    """Return a card whose sources are all in the context, and the tries"""
+    allowed = context_chunk_ids(context)
+    messages = [
+        ChatMessage(
+            role="system",
+            content=f"{GENERATOR_INSTRUCTIONS}\n{ACCEPTANCE_GENERATOR_NOTE}",
+        ),
+        ChatMessage(role="user", content=f"{query}\n\n{context}"),
+    ]
+    for attempt in range(1, MAX_SOURCE_ATTEMPTS + 1):
+        text = await run_agent(
+            Agent(
+                name=AGENT_NAMES[CallPurpose.GENERATE],
+                messages=messages,
+                params=build_generate_params(),
+            ),
+            messages[-1].content,
+        )
+        card = read_json_object(text)
+        cited = [
+            str(SourceRef.model_validate(source).chunk_id)
+            for source in card.get(SOURCES_KEY, [])
+        ]
+        # A cited chunk must exist and must have been in the context.
+        invalid = {
+            chunk_id for chunk_id in cited if chunk_id not in allowed
+        } | find_missing_chunk_ids(cited)
+        if not invalid:
+            return card, attempt
+        messages = [
+            *messages,
+            ChatMessage(role="assistant", content=text),
+            ChatMessage(
+                role="user",
+                content=(
+                    "These sources are not in the context: "
+                    f"{', '.join(sorted(invalid))}. Cite only the [id] "
+                    "headers above."
+                ),
+            ),
+        ]
+    raise SourceValidationError()
+
+
+async def run_rag_pipeline(
+    query: str, doc_ids: list[str]
+) -> tuple[CardDraft, int, str, str, AcceptanceGuardReport]:
+    """Return the card draft, its tries, the verdict, its status and the
+    guard report
+    """
+    context = await retrieve_context_async(query, doc_ids)
+    card, attempts = await write_acceptance_card(query, context)
+    draft = CardDraft.model_validate(card)
+    critic_messages = [
+        ChatMessage(role="system", content=ACCEPTANCE_CRITIC_INSTRUCTIONS),
+        ChatMessage(
+            role="user", content=f"{context}\n\n{draft.model_dump_json()}"
+        ),
+    ]
+    critique_text = await run_agent(
+        Agent(
+            name=AGENT_NAMES[CallPurpose.CRITIQUE],
+            messages=critic_messages,
+            params=build_critique_params(),
+        ),
+        critic_messages[-1].content,
+    )
+    critique = Critique.model_validate(read_json_object(critique_text))
+    _, issues = guard_output(draft.model_dump_json())
+    report = AcceptanceGuardReport(output_issues=issues)
+    if critique.verdict == "revise":
+        status = TEST_REJECTED
+    elif report.needs_review or confidence_gate(draft) != TEST_DONE:
+        status = "needs_review"
+    else:
+        status = TEST_DONE
+    return draft, attempts, TEST_VERDICTS[critique.verdict], status, report
