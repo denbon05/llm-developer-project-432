@@ -166,10 +166,28 @@ async def preview_card(
     )
 
 
-# TODO(acceptance): the pipeline API the external acceptance tests call
+# TODO(acceptance): the pipeline API the external acceptance tests call,
+# in their names: a passed draft is "done", one the critic still rejects
+# after the last round is "rejected", any other waits in "needs_review".
+TEST_VERDICTS = {"pass": "approve", "revise": "regenerate"}
+TEST_DONE = "done"
+TEST_REJECTED = "rejected"
+
+
 async def run_pipeline(
     supplier_text: str, max_attempts: int = MAX_GENERATION_ATTEMPTS
-) -> tuple[CardDraft, int, Verdict, DraftStatus]:
+) -> tuple[CardDraft, int, str, str]:
     """Return the card draft, its rounds, the last verdict and its status"""
     preview = await preview_card(supplier_text, max_attempts)
-    return preview.card, preview.attempts, preview.verdict, preview.status
+    if preview.verdict == "revise":
+        status = TEST_REJECTED
+    elif preview.status == "awaiting_approval":
+        status = TEST_DONE
+    else:
+        status = preview.status
+    return (
+        preview.card,
+        preview.attempts,
+        TEST_VERDICTS[preview.verdict],
+        status,
+    )
