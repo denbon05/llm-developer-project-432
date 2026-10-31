@@ -160,3 +160,18 @@ def mask_texts(texts: list[str]) -> MaskedTexts:
         texts=masked,
         counts={category.value: len(keys[category]) for category in keys},
     )
+
+
+# TODO(acceptance): the names the external acceptance tests import.
+_inn_checksum = has_valid_tax_id_checksum
+
+
+def contains_pii(text: str) -> bool:
+    """Return whether the text holds personal data"""
+    return any(mask_texts([text]).counts.values())
+
+
+def mask_pii(text: str) -> str:
+    """Return the text with its personal data masked"""
+    [masked_text] = mask_texts([text]).texts
+    return masked_text

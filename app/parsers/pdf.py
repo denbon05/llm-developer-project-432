@@ -79,3 +79,7 @@ def parse_pdf(content: bytes) -> ParsedDocument:
         ),
         page_count=page_count,
     )
+
+
+# TODO(acceptance): the name the external acceptance tests import.
+PdfNoTextLayer = UnreadableDocumentError
