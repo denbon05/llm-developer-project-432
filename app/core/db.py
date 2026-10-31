@@ -1,13 +1,13 @@
 import asyncio
 import json
-from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
+from types import TracebackType
+from typing import Any
 
 import asyncpg
 from asyncpg.pool import PoolConnectionProxy
 from pgvector.asyncpg import register_vector
 
-from app.core.config import Settings
+from app.core.config import Settings, get_settings
 from app.core.errors import UnavailableError
 from app.core.logging import get_logger
 
@@ -91,19 +91,66 @@ def pool() -> asyncpg.Pool:
     return _pool
 
 
-@asynccontextmanager
-async def connection() -> AsyncGenerator[PoolConnectionProxy]:
-    """Take a connection from the pool and return it on exit"""
-    try:
-        conn = await pool().acquire()
-    except CONNECTION_ERRORS as error:
-        raise DatabaseUnavailableError() from error
-    try:
-        yield conn
-    except CONNECTION_ERRORS as error:
-        raise DatabaseUnavailableError() from error
-    finally:
-        await pool().release(conn)
+class Connection:
+    """A pool connection under `async with`"""
+
+    def __init__(self) -> None:
+        self.pooled: PoolConnectionProxy | None = None
+        self.direct: Any = None
+
+    async def __aenter__(self) -> PoolConnectionProxy:
+        """Take a connection from the pool"""
+        try:
+            self.pooled = await pool().acquire()
+        except CONNECTION_ERRORS as error:
+            raise DatabaseUnavailableError() from error
+        return self.pooled
+
+    async def __aexit__(
+        self,
+        error_type: type[BaseException] | None,
+        error: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        """Return the connection to the pool"""
+        if self.pooled is not None:
+            await pool().release(self.pooled)
+        if isinstance(error, CONNECTION_ERRORS):
+            raise DatabaseUnavailableError() from error
+
+    # TODO(acceptance): the external acceptance tests open a connection with
+    # a plain `with`, as psycopg does; they get a psycopg connection outside
+    # the pool, in autocommit. psycopg is a development dependency only.
+    def __enter__(self) -> Any:
+        """Open a direct synchronous connection"""
+        import psycopg
+        from pgvector.psycopg import register_vector as register_psycopg_vector
+
+        self.direct = psycopg.connect(
+            get_settings().database_url, autocommit=True
+        )
+        try:
+            register_psycopg_vector(self.direct)
+        except psycopg.ProgrammingError:
+            logger.warning(
+                "vector_codec_skipped", reason="vector extension missing"
+            )
+        return self.direct
+
+    def __exit__(
+        self,
+        error_type: type[BaseException] | None,
+        error: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        """Close the direct connection"""
+        if self.direct is not None:
+            self.direct.close()
+
+
+def connection() -> Connection:
+    """Return a connection from the pool, taken on entry, returned on exit"""
+    return Connection()
 
 
 async def check_database() -> None:

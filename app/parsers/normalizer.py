@@ -190,7 +190,13 @@ def normalize_blocks(
 
 
 # TODO(acceptance): the names the external acceptance tests import.
-clean_text = normalize_inline
+def clean_text(text: str) -> str:
+    """Return the text normalised onto one line, with words hyphenated across
+    a line break joined
+    """
+    return normalize_inline(
+        " ".join(join_hyphenated_lines(normalize_lines([text])))
+    )
 
 
 def normalize(blocks: list[ParsedBlock]) -> list[ParsedBlock]:

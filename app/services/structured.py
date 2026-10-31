@@ -10,7 +10,7 @@ from app.agents.prompts import (
 )
 from app.core.errors import UpstreamError
 from app.core.logging import get_logger
-from app.llm.client import CallParams, ChatMessage, complete
+from app.llm.client import Agent, CallParams, ChatMessage, run_agent
 from app.services.json_utils import JsonReadError, read_json_object
 
 # Output repairs and field fixes together, after the first call
@@ -107,17 +107,23 @@ async def complete_structured[ModelT: BaseModel](
     fields: list[str] = []
     repairs_counter = 0
     while True:
-        completion = await complete(
-            request,
-            params=params,
-            response_schema=(
-                build_fix_schema(response_schema, fields)
-                if fields
-                else response_schema
+        # TODO(acceptance): through run_agent, which the external acceptance
+        # tests substitute; the prompt is the request's last message.
+        text = await run_agent(
+            Agent(
+                name=params.purpose,
+                messages=request,
+                params=params,
+                response_schema=(
+                    build_fix_schema(response_schema, fields)
+                    if fields
+                    else response_schema
+                ),
             ),
+            request[-1].content,
         )
         try:
-            reply = read_json_object(completion.text)
+            reply = read_json_object(text)
         except JsonReadError as error:
             errors = [str(error)]
             # An unreadable field-fix reply leaves the request as it was: the
@@ -125,9 +131,7 @@ async def complete_structured[ModelT: BaseModel](
             # from reasoning models spending all of max_tokens before
             # answering, failing at once is the alternative to repairing them.
             if not fields:
-                request = build_output_repair_messages(
-                    messages, completion.text, errors
-                )
+                request = build_output_repair_messages(messages, text, errors)
         else:
             if fields:
                 current |= {

@@ -9,6 +9,8 @@ from app.schemas.cards import NonBlankText
 
 SEARCH_DEFAULT_TOP_K = 5
 SEARCH_MAX_TOP_K = 50
+# TODO(acceptance): joins a table row's cells in a block's content
+TABLE_CELL_SEPARATOR = " | "
 
 
 class DocumentFormat(StrEnum):
@@ -93,6 +95,12 @@ class TextBlock(BaseModel):
     section: str | None
     lines: list[str]
 
+    # TODO(acceptance): the text the external acceptance tests read
+    @property
+    def content(self) -> str:
+        """Return the block's lines as one text"""
+        return "\n".join(self.lines)
+
 
 class TableRow(BaseModel):
     """A table row's cells and the row number a person sees"""
@@ -108,6 +116,15 @@ class TableBlock(BaseModel):
     section: str | None
     headers: list[str]
     rows: list[TableRow]
+
+    # TODO(acceptance): the text the external acceptance tests read
+    @property
+    def content(self) -> str:
+        """Return the headers and rows as lines of cells"""
+        return "\n".join(
+            TABLE_CELL_SEPARATOR.join(cells)
+            for cells in [self.headers, *(row.cells for row in self.rows)]
+        )
 
 
 ParsedBlock = TextBlock | TableBlock
@@ -143,6 +160,22 @@ class Chunk(BaseModel):
 
     text: str
     metadata: ChunkMetadata
+
+    # TODO(acceptance): the names the external acceptance tests read
+    @property
+    def content(self) -> str:
+        """Return the chunk's text"""
+        return self.text
+
+    @property
+    def section(self) -> str | None:
+        """Return the section the chunk sits in"""
+        return self.metadata["section"]
+
+    @property
+    def page(self) -> int:
+        """Return the page the chunk sits on"""
+        return self.metadata["page"]
 
 
 class ChunkText(NamedTuple):

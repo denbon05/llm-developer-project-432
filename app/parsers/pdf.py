@@ -6,7 +6,7 @@ import pdfplumber
 
 from app.core.errors import UnreadableDocumentError
 from app.parsers.blocks import build_blocks
-from app.schemas.documents import HeadedLine, ParsedDocument
+from app.schemas.documents import HeadedLine, ParsedBlock, ParsedDocument
 
 UNREADABLE_PDF_REASON = "the file is not a readable PDF"
 NO_TEXT_LAYER_REASON = (
@@ -62,7 +62,7 @@ def read_lines(content: bytes) -> tuple[list[PdfLine], int]:
     return lines, page_count
 
 
-def parse_pdf(content: bytes) -> ParsedDocument:
+def read_pdf(content: bytes) -> ParsedDocument:
     """Return the text blocks of a PDF, page by page"""
     lines, page_count = read_lines(content)
     if not lines:
@@ -83,3 +83,10 @@ def parse_pdf(content: bytes) -> ParsedDocument:
 
 # TODO(acceptance): the name the external acceptance tests import.
 PdfNoTextLayer = UnreadableDocumentError
+
+
+# TODO(acceptance): the name the external acceptance tests import; it returns
+# the blocks alone.
+def parse_pdf(content: bytes) -> list[ParsedBlock]:
+    """Return the blocks read from the file, in reading order"""
+    return read_pdf(content).blocks

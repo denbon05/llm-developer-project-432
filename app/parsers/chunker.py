@@ -177,7 +177,12 @@ def build_metadata(
     return metadata
 
 
-def chunk_blocks(blocks: list[ParsedBlock]) -> list[Chunk]:
+def chunk_blocks(
+    blocks: list[ParsedBlock],
+    # TODO(acceptance): the external acceptance tests pass a document id;
+    # chunks don't carry it.
+    document_id: str | None = None,
+) -> list[Chunk]:
     """Return the blocks' chunks in reading order, each text once"""
     chunks: list[Chunk] = []
     seen_texts: set[str] = set()

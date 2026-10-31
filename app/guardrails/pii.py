@@ -171,7 +171,12 @@ def contains_pii(text: str) -> bool:
     return any(mask_texts([text]).counts.values())
 
 
-def mask_pii(text: str) -> str:
-    """Return the text with its personal data masked"""
-    [masked_text] = mask_texts([text]).texts
-    return masked_text
+def mask_pii(text: str) -> tuple[str, dict[str, int]]:
+    """Return the text with its personal data masked, and the values masked
+    by category
+    """
+    masked = mask_texts([text])
+    [masked_text] = masked.texts
+    return masked_text, {
+        category: count for category, count in masked.counts.items() if count
+    }

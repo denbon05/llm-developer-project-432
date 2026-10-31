@@ -309,3 +309,66 @@ async def complete(
     await record_call(params.purpose, completion)
 
     return completion
+
+
+# TODO(acceptance): the call path the external acceptance tests substitute.
+# They replace run_agent, or Runner.run under it, so every structured call
+# goes through run_agent. Its own retries never fire in production: complete
+# retries itself and raises LlmUnavailableError or LlmRequestError, which
+# _retryable doesn't retry.
+RUN_AGENT_MAX_RETRIES = 2
+
+
+class Agent(BaseModel):
+    """One model call: the role, its messages and the reply schema"""
+
+    name: str
+    messages: list[ChatMessage]
+    params: CallParams
+    response_schema: type[BaseModel] | None = None
+
+
+class RunResult(BaseModel):
+    """A model call's reply text"""
+
+    final_output: str
+
+
+class Runner:
+    """Runs one model call"""
+
+    @staticmethod
+    async def run(agent: Agent, prompt: str) -> RunResult:
+        """Return the model's reply to the agent's messages"""
+        completion = await complete(
+            agent.messages,
+            params=agent.params,
+            response_schema=agent.response_schema,
+        )
+        return RunResult(final_output=completion.text)
+
+
+def setup_llm() -> None:
+    """Create the process-wide client for the model server"""
+    get_openai_client()
+
+
+def _retryable(error: BaseException) -> bool:
+    """Return whether calling again can succeed after this error"""
+    return is_retryable(error)
+
+
+async def run_agent(agent: Agent, prompt: str) -> str:
+    """Return the reply text of the agent's call, retried while retryable"""
+    setup_llm()
+    attempt = 0
+    while True:
+        try:
+            result = await Runner.run(agent, prompt)
+        except Exception as error:
+            if not _retryable(error) or attempt == RUN_AGENT_MAX_RETRIES:
+                raise
+            attempt += 1
+            await asyncio.sleep(BACKOFF_MULTIPLIER_S * 2**attempt)
+            continue
+        return result.final_output

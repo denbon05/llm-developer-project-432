@@ -1,3 +1,4 @@
+import app.llm.client
 from app.agents.prompts import (
     CRITIC_MAX_TOKENS,
     CRITIC_TEMPERATURE,
@@ -26,6 +27,9 @@ from app.schemas.cards import (
 from app.services.structured import complete_structured
 
 MAX_GENERATION_ATTEMPTS = 3
+# TODO(acceptance): the name the external acceptance tests substitute; the
+# calls themselves go through services.structured.
+run_agent = app.llm.client.run_agent
 
 logger = get_logger(__name__)
 

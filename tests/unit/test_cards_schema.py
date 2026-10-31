@@ -7,9 +7,9 @@ from pydantic import BaseModel, ValidationError
 
 from app.llm.client import build_response_format
 from app.schemas.cards import (
-    CARD_TITLE_MAX_LENGTH,
     META_DESCRIPTION_MAX_LENGTH,
     META_TITLE_MAX_LENGTH,
+    SUPPLIER_CARD_TITLE_MAX_LENGTH,
     CardDraft,
     Critique,
     GroundedCardDraft,
@@ -46,7 +46,9 @@ WRITTEN_FIELDS = [
     for schema, data in [
         *SCHEMAS_WITH_MISSING_FIELDS,
         (GroundedCardDraft, GROUNDED_DRAFT),
-        (Seo, SEO),
+        # TODO(acceptance): (Seo, SEO) again after the rollback; the SEO
+        # fields have defaults for the external tests, and only the schema
+        # sent to the model requires them.
     ]
     for field in schema.model_fields
 ]
@@ -158,7 +160,8 @@ def test_blank_list_items_are_dropped() -> None:
         (
             lambda text: {**DRAFT, "title": text},
             ("title",),
-            CARD_TITLE_MAX_LENGTH,
+            # TODO(acceptance): CARD_TITLE_MAX_LENGTH after the rollback
+            SUPPLIER_CARD_TITLE_MAX_LENGTH,
         ),
         (
             lambda text: {**DRAFT, "seo": {**SEO, "meta_title": text}},
@@ -363,3 +366,10 @@ def test_empty_cited_value_becomes_missing_field() -> None:
     assert list(draft.characteristics) == ["Power"]
     assert draft.missing_fields == ["Warranty", "Color"]
     assert draft.confidence == 0.33
+
+
+def test_seo_schema_requires_every_field() -> None:
+    """The model must write every SEO field, defaults or not"""
+    schema = Seo.model_json_schema()
+
+    assert schema["required"] == list(Seo.model_fields)

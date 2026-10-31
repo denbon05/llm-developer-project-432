@@ -82,6 +82,17 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
+    # TODO(acceptance): the setting names the external acceptance tests read
+    @property
+    def temporal_host(self) -> str:
+        """Return the Temporal address"""
+        return self.temporal_address
+
+    @property
+    def suspicious_chunk_limit(self) -> int:
+        """Return the excluded chunks that exclude a document whole"""
+        return self.injection_check_document_threshold
+
     @model_validator(mode="after")
     def check_stage_call_limits(self) -> Self:
         """Reject stage timeouts or retries above the client defaults"""

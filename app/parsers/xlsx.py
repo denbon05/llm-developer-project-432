@@ -86,7 +86,7 @@ def read_table(
     )
 
 
-def parse_xlsx(content: bytes) -> ParsedDocument:
+def read_xlsx(content: bytes) -> ParsedDocument:
     """Return one table block per visible sheet that has a value"""
     try:
         sheets = read_sheets(content)
@@ -101,3 +101,10 @@ def parse_xlsx(content: bytes) -> ParsedDocument:
             blocks.append(table)
     # Hidden sheets are not read, so they don't count.
     return ParsedDocument(blocks=blocks, page_count=len(sheets))
+
+
+# TODO(acceptance): the name the external acceptance tests import; it returns
+# the blocks alone.
+def parse_xlsx(content: bytes) -> list[ParsedBlock]:
+    """Return the blocks read from the file, in reading order"""
+    return read_xlsx(content).blocks

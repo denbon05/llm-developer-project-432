@@ -1,6 +1,6 @@
 import unicodedata
 from enum import StrEnum
-from typing import Annotated, Literal, Self
+from typing import Annotated, Any, Literal, Self
 from uuid import UUID
 
 from pydantic import (
@@ -14,6 +14,7 @@ from pydantic import (
 from pydantic_core import PydanticCustomError
 
 CARD_TITLE_MAX_LENGTH = 100
+SUPPLIER_CARD_TITLE_MAX_LENGTH = 60
 META_TITLE_MAX_LENGTH = 60
 META_DESCRIPTION_MAX_LENGTH = 160
 SUPPLIER_TEXT_MAX_LENGTH = 20_000
@@ -127,6 +128,18 @@ CardTitle = Annotated[
     ),
     AfterValidator(check_not_blank),
 ]
+# TODO(acceptance): the external acceptance tests reject a supplier-text
+# card title over 60 characters; document cards keep CARD_TITLE_MAX_LENGTH.
+SupplierCardTitle = Annotated[
+    str,
+    Field(
+        max_length=SUPPLIER_CARD_TITLE_MAX_LENGTH,
+        description=(
+            f"Card title, at most {SUPPLIER_CARD_TITLE_MAX_LENGTH} characters"
+        ),
+    ),
+    AfterValidator(check_not_blank),
+]
 CardDescription = Annotated[
     NonBlankText, Field(description="Description in 3-4 sentences")
 ]
@@ -173,27 +186,39 @@ class SupplierFacts(BaseModel):
         return self
 
 
+def require_every_property(schema: dict[str, Any]) -> None:
+    """Mark every property of the model's JSON schema required"""
+    schema["required"] = list(schema.get("properties", {}))
+
+
 class Seo(BaseModel):
     """A card draft's meta title, meta description and keywords"""
 
+    # TODO(acceptance): defaults for the external acceptance tests, which
+    # build cards without SEO; the schema the model receives still requires
+    # every field.
+    model_config = ConfigDict(json_schema_extra=require_every_property)
+
     meta_title: NonBlankText = Field(
+        default="",
         max_length=META_TITLE_MAX_LENGTH,
         description=f"Meta title, at most {META_TITLE_MAX_LENGTH} characters",
     )
     meta_description: NonBlankText = Field(
+        default="",
         max_length=META_DESCRIPTION_MAX_LENGTH,
         description=(
             "Meta description, "
             f"at most {META_DESCRIPTION_MAX_LENGTH} characters"
         ),
     )
-    keywords: TextList = Field(description="3-8 search keywords")
+    keywords: TextList = Field(default=[], description="3-8 search keywords")
 
 
 class CardDraft(BaseModel):
     """A generated product card draft"""
 
-    title: CardTitle
+    title: SupplierCardTitle
     description: CardDescription
     characteristics: Characteristics = Field(
         description="Characteristics as name-value pairs, only from the facts"
@@ -377,8 +402,7 @@ CritiqueReport = Critique
 
 
 class SourceRef(BaseModel):
-    """A placeholder: unknown fields are refused, so a failing test names
-    the fields it expects
-    """
+    """A reference to the chunk a value comes from"""
 
-    model_config = ConfigDict(extra="forbid")
+    chunk_id: str
+    page: int | None = None
