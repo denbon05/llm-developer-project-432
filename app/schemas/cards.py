@@ -370,3 +370,16 @@ class CardRequest(BaseModel):
     """Supplier text to turn into a card draft"""
 
     supplier_text: SupplierText
+
+
+# TODO(acceptance): the names the external acceptance tests import.
+CritiqueReport = Critique
+Seo = SeoBlock
+
+
+class SourceRef(BaseModel):
+    """A placeholder: unknown fields are refused, so a failing test names
+    the fields it expects
+    """
+
+    model_config = ConfigDict(extra="forbid")

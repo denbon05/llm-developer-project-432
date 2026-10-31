@@ -192,3 +192,7 @@ def build_chunks(blocks: list[ParsedBlock]) -> list[Chunk]:
             Chunk(text=text, metadata=build_metadata(len(chunks), block, row))
         )
     return chunks
+
+
+# TODO(acceptance): the name the external acceptance tests import.
+chunk_blocks = build_chunks

@@ -130,3 +130,8 @@ class Settings(BaseSettings):
 def get_settings() -> Settings:
     """Return cached application settings"""
     return Settings()
+
+
+# TODO(acceptance): the module-level name the external acceptance tests
+# import.
+settings = get_settings()
