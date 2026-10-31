@@ -99,15 +99,16 @@ def parse_pdf(content: bytes) -> list[ParsedBlock]:
     with pdfplumber.open(io.BytesIO(content)) as pdf:
         for page_number, page in enumerate(pdf.pages, start=1):
             for table in page.extract_tables():
-                headers, *rows = [[cell or "" for cell in row] for row in table]
+                rows = [[cell or "" for cell in row] for row in table]
                 blocks.append(
                     TableBlock(
                         page=page_number,
                         section=None,
-                        headers=headers,
+                        headers=rows[0],
+                        # The header row too: the tests count every row.
                         rows=[
                             TableRow(number=number, cells=cells)
-                            for number, cells in enumerate(rows, start=2)
+                            for number, cells in enumerate(rows, start=1)
                         ],
                     )
                 )

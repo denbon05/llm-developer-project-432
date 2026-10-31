@@ -93,7 +93,7 @@ async def test_run_pipeline_passes_first_time(
     """A draft the critic passes ends the loop after one round"""
     calls = stub_model(monkeypatch, [FACTS, DRAFT, PASS])
 
-    preview = await pipeline.run_pipeline(SUPPLIER_TEXT)
+    preview = await pipeline.preview_card(SUPPLIER_TEXT)
 
     # The third model call is the critique.
     assert "confidence" not in calls[2].messages[-1].content
@@ -109,7 +109,7 @@ async def test_run_pipeline_revises_with_critic_issues(
     """A revision sends the critic's issues and the previous draft"""
     calls = stub_model(monkeypatch, [FACTS, DRAFT, REVISE, REVISED_DRAFT, PASS])
 
-    preview = await pipeline.run_pipeline(SUPPLIER_TEXT)
+    preview = await pipeline.preview_card(SUPPLIER_TEXT)
 
     # The fourth model call is the revision; its last message is the
     # user prompt.
@@ -130,7 +130,7 @@ async def test_run_pipeline_stops_after_revision_budget(
     rounds: list[Reply] = [DRAFT, REVISE]
     stub_model(monkeypatch, [FACTS, *rounds * pipeline.MAX_GENERATION_ATTEMPTS])
 
-    preview = await pipeline.run_pipeline(SUPPLIER_TEXT)
+    preview = await pipeline.preview_card(SUPPLIER_TEXT)
 
     assert preview.attempts == pipeline.MAX_GENERATION_ATTEMPTS
     assert preview.verdict == "revise"
@@ -154,7 +154,7 @@ async def test_run_pipeline_routes_sparse_draft_by_the_threshold(
     monkeypatch.setattr(pipeline, "get_settings", lambda: settings)
     stub_model(monkeypatch, [SPARSE_FACTS, SPARSE_DRAFT, PASS])
 
-    preview = await pipeline.run_pipeline(SUPPLIER_TEXT)
+    preview = await pipeline.preview_card(SUPPLIER_TEXT)
 
     assert preview.verdict == "pass"
     assert preview.card.missing_fields == SPARSE_FACTS.missing_fields
@@ -167,7 +167,7 @@ async def test_run_pipeline_masks_the_supplier_text_before_the_extractor(
     """The extractor sees a placeholder; the preview counts what was masked"""
     calls = stub_model(monkeypatch, [FACTS, DRAFT, PASS])
 
-    preview = await pipeline.run_pipeline(f"{SUPPLIER_TEXT} Call {PHONE}.")
+    preview = await pipeline.preview_card(f"{SUPPLIER_TEXT} Call {PHONE}.")
 
     extractor_prompt = calls[0].messages[-1].content
     assert PHONE not in extractor_prompt
@@ -191,7 +191,7 @@ async def test_run_pipeline_masks_a_leak_and_waits_for_review(
     )
     stub_model(monkeypatch, [FACTS, leaking_draft, PASS])
 
-    preview = await pipeline.run_pipeline(SUPPLIER_TEXT)
+    preview = await pipeline.preview_card(SUPPLIER_TEXT)
 
     assert preview.card.description.endswith("Order at [PHONE_1].")
     assert preview.guard_report.leaks == [

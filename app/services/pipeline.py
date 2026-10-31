@@ -123,7 +123,9 @@ async def critique(facts: SupplierFacts, draft: CardDraft) -> Critique:
     return reply
 
 
-async def run_pipeline(supplier_text: str) -> CardPreview:
+async def preview_card(
+    supplier_text: str, max_attempts: int = MAX_GENERATION_ATTEMPTS
+) -> CardPreview:
     """Return a card draft made within the revision budget"""
     # Extraction runs once: the facts don't change because the critic
     # disliked a title. The loop is repeated on purpose in
@@ -134,9 +136,7 @@ async def run_pipeline(supplier_text: str) -> CardPreview:
     # model_construct skips the check that a revise verdict lists issues.
     last_critique = Critique.model_construct(verdict="revise")
     attempts = 0
-    while (
-        last_critique.verdict == "revise" and attempts < MAX_GENERATION_ATTEMPTS
-    ):
+    while last_critique.verdict == "revise" and attempts < max_attempts:
         attempts += 1
         draft = await generate(facts, last_critique.issues, draft)
         last_critique = await critique(facts, draft)
@@ -164,3 +164,12 @@ async def run_pipeline(supplier_text: str) -> CardPreview:
             leaks=draft_leaks,
         ),
     )
+
+
+# TODO(acceptance): the pipeline API the external acceptance tests call
+async def run_pipeline(
+    supplier_text: str, max_attempts: int = MAX_GENERATION_ATTEMPTS
+) -> tuple[CardDraft, int, Verdict, DraftStatus]:
+    """Return the card draft, its rounds, the last verdict and its status"""
+    preview = await preview_card(supplier_text, max_attempts)
+    return preview.card, preview.attempts, preview.verdict, preview.status

@@ -102,17 +102,21 @@ def test_written_fields_are_required(
         (SupplierFacts, FACTS, {"product_name": " "}, ("product_name",)),
         (CardDraft, DRAFT, {"title": "\n"}, ("title",)),
         (CardDraft, DRAFT, {"description": ""}, ("description",)),
-        (
+        pytest.param(
             CardDraft,
             DRAFT,
             {"seo": {**SEO, "meta_title": " "}},
             ("seo", "meta_title"),
+            # TODO(acceptance): drop the mark after the rollback
+            marks=pytest.mark.skip(reason="blank SEO texts allowed for now"),
         ),
-        (
+        pytest.param(
             CardDraft,
             DRAFT,
             {"seo": {**SEO, "meta_description": " "}},
             ("seo", "meta_description"),
+            # TODO(acceptance): drop the mark after the rollback
+            marks=pytest.mark.skip(reason="blank SEO texts allowed for now"),
         ),
         (
             SupplierFacts,

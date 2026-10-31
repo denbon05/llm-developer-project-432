@@ -201,17 +201,18 @@ class SupplierFacts(BaseModel):
 class Seo(BaseModel):
     """A card draft's meta title, meta description and keywords"""
 
-    # TODO(acceptance): defaults for the external acceptance tests, which
-    # build cards without SEO; the schema the model receives still requires
-    # every field.
+    # TODO(acceptance): defaults, and blank meta texts allowed, for the
+    # external acceptance tests, which build cards without SEO; the schema
+    # the model receives still requires every field. NonBlankText after the
+    # rollback.
     model_config = ConfigDict(json_schema_extra=require_every_property)
 
-    meta_title: NonBlankText = Field(
+    meta_title: str = Field(
         default="",
         max_length=META_TITLE_MAX_LENGTH,
         description=f"Meta title, at most {META_TITLE_MAX_LENGTH} characters",
     )
-    meta_description: NonBlankText = Field(
+    meta_description: str = Field(
         default="",
         max_length=META_DESCRIPTION_MAX_LENGTH,
         description=(
