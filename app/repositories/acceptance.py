@@ -26,13 +26,9 @@ DOCUMENT_COLUMNS = {
     "created_at": "timestamptz NOT NULL DEFAULT now()",
 }
 CHUNK_COLUMNS = {
-    "chunk_id": "text",
     "doc_id": "text",
-    "content": "text",
+    "ordinal": "integer",
     "text": "text",
-    "section": "text",
-    "page": "integer",
-    "chunk_index": "integer",
     "metadata": "jsonb NOT NULL DEFAULT '{}'",
 }
 
@@ -58,7 +54,7 @@ def create_acceptance_schema(conn: Any) -> None:
     add_columns(conn, "documents", DOCUMENT_COLUMNS)
     conn.execute(
         f"CREATE TABLE IF NOT EXISTS {ACCEPTANCE_SCHEMA}.chunks "
-        "(id bigserial PRIMARY KEY)"
+        "(id text PRIMARY KEY)"
     )
     add_columns(
         conn,
@@ -68,6 +64,6 @@ def create_acceptance_schema(conn: Any) -> None:
     conn.execute(
         f"ALTER TABLE {ACCEPTANCE_SCHEMA}.chunks ADD COLUMN IF NOT EXISTS tsv "
         "tsvector GENERATED ALWAYS AS "
-        "(to_tsvector('russian', coalesce(content, text, ''))) STORED"
+        "(to_tsvector('russian', coalesce(text, ''))) STORED"
     )
     conn.execute(f"SET search_path TO {ACCEPTANCE_SCHEMA}, public")
