@@ -10,6 +10,7 @@ from app.core.errors import UnreadableDocumentError
 from app.parsers.blocks import build_blocks
 from app.schemas.documents import (
     HeadedLine,
+    ParsedBlock,
     ParsedDocument,
     TableBlock,
     TableRow,
@@ -111,7 +112,7 @@ def read_items(document: Document) -> tuple[list[HeadedLine | TableBlock], int]:
     return items, FIRST_PAGE + breaks_before
 
 
-def parse_docx(content: bytes) -> ParsedDocument:
+def read_docx(content: bytes) -> ParsedDocument:
     """Return the text and table blocks of a DOCX body, in document order"""
     try:
         items, page_count = read_items(docx.Document(io.BytesIO(content)))
@@ -120,3 +121,10 @@ def parse_docx(content: bytes) -> ParsedDocument:
     except Exception as error:
         raise UnreadableDocumentError(UNREADABLE_DOCX_REASON) from error
     return ParsedDocument(blocks=build_blocks(items), page_count=page_count)
+
+
+# TODO(acceptance): the name the external acceptance tests import; it returns
+# the blocks alone.
+def parse_docx(content: bytes) -> list[ParsedBlock]:
+    """Return the blocks read from the file, in reading order"""
+    return read_docx(content).blocks

@@ -29,6 +29,7 @@ dev = [
     "dbmate-bin",
     "httpx",
     "httpx2",
+    "psycopg[binary]>=3.3.6",
     "pytest",
     "pytest-asyncio",
     "ruff",

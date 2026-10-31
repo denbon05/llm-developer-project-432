@@ -5,12 +5,22 @@ from pydantic import BaseModel, Field, ValidationError, create_model
 from pydantic_core import ErrorDetails
 
 from app.agents.prompts import (
+    GENERATOR_INSTRUCTIONS,
     build_field_fix_messages,
     build_output_repair_messages,
 )
+from app.core.config import get_settings
 from app.core.errors import UpstreamError
 from app.core.logging import get_logger
-from app.llm.client import CallParams, ChatMessage, complete
+from app.llm.client import (
+    AGENT_NAMES,
+    Agent,
+    CallParams,
+    CallPurpose,
+    ChatMessage,
+    run_agent,
+)
+from app.schemas.cards import CardDraft
 from app.services.json_utils import JsonReadError, read_json_object
 
 # Output repairs and field fixes together, after the first call
@@ -107,17 +117,23 @@ async def complete_structured[ModelT: BaseModel](
     fields: list[str] = []
     repairs_counter = 0
     while True:
-        completion = await complete(
-            request,
-            params=params,
-            response_schema=(
-                build_fix_schema(response_schema, fields)
-                if fields
-                else response_schema
+        # TODO(acceptance): through run_agent, which the external acceptance
+        # tests substitute; the prompt is the request's last message.
+        text = await run_agent(
+            Agent(
+                name=AGENT_NAMES[params.purpose],
+                messages=request,
+                params=params,
+                response_schema=(
+                    build_fix_schema(response_schema, fields)
+                    if fields
+                    else response_schema
+                ),
             ),
+            request[-1].content,
         )
         try:
-            reply = read_json_object(completion.text)
+            reply = read_json_object(text)
         except JsonReadError as error:
             errors = [str(error)]
             # An unreadable field-fix reply leaves the request as it was: the
@@ -125,9 +141,7 @@ async def complete_structured[ModelT: BaseModel](
             # from reasoning models spending all of max_tokens before
             # answering, failing at once is the alternative to repairing them.
             if not fields:
-                request = build_output_repair_messages(
-                    messages, completion.text, errors
-                )
+                request = build_output_repair_messages(messages, text, errors)
         else:
             if fields:
                 current |= {
@@ -156,3 +170,65 @@ async def complete_structured[ModelT: BaseModel](
             raise InvalidModelOutputError(response_schema, errors)
         repairs_counter += 1
         log_fix_request(response_schema, fields)
+
+
+# TODO(acceptance): the generator API the external acceptance tests call.
+# The product generates through services.pipeline; these wrap the same
+# repair loop and field fix.
+CardValidationError = InvalidModelOutputError
+REPORTED_CONFIDENCE_KEY = "confidence"
+GATE_NEEDS_REVIEW = "needs_review"
+GATE_DONE = "done"
+
+
+def build_card_messages(facts: str) -> list[ChatMessage]:
+    """Return the generator's messages for these supplier facts"""
+    return [
+        ChatMessage(role="system", content=GENERATOR_INSTRUCTIONS),
+        ChatMessage(role="user", content=facts),
+    ]
+
+
+async def validate_or_retry(facts: str) -> CardDraft:
+    """Return a card draft for the facts, repaired while the budget lasts"""
+    from app.services.pipeline import build_generate_params
+
+    return await complete_structured(
+        build_card_messages(facts),
+        params=build_generate_params(),
+        response_schema=CardDraft,
+    )
+
+
+async def regenerate_field(
+    card: CardDraft, field: str, reason: str
+) -> CardDraft:
+    """Return the card with only this field written again"""
+    from app.services.pipeline import build_generate_params
+
+    shown = card.model_dump_json(indent=2)
+    request = build_field_fix_messages(
+        build_card_messages(shown), shown, [f"{field}: {reason}"], [field]
+    )
+    text = await run_agent(
+        Agent(
+            name=AGENT_NAMES[CallPurpose.GENERATE],
+            messages=request,
+            params=build_generate_params(),
+            response_schema=build_fix_schema(CardDraft, [field]),
+        ),
+        request[-1].content,
+    )
+    reply = read_json_object(text)
+    # Only what was set: a default SEO field would fail validation as blank.
+    data = card.model_dump(exclude_unset=True) | {field: reply[field]}
+    if card.reported_confidence is not None:
+        data[REPORTED_CONFIDENCE_KEY] = card.reported_confidence
+    return CardDraft.model_validate(data)
+
+
+def confidence_gate(card: CardDraft) -> str:
+    """Return where the card's confidence alone sends it"""
+    if card.confidence < get_settings().card_confidence_threshold:
+        return GATE_NEEDS_REVIEW
+    return GATE_DONE

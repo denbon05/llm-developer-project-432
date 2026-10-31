@@ -5,8 +5,8 @@ from typing import Any
 import pytest
 from pydantic import BaseModel
 
+from app.llm import client
 from app.llm.client import CallParams, ChatMessage, Completion
-from app.services import structured
 
 # An exception is raised instead of replying, as the client raises it.
 Reply = BaseModel | dict[str, Any] | str | Exception
@@ -55,5 +55,5 @@ def stub_model(
             latency_s=0,
         )
 
-    monkeypatch.setattr(structured, "complete", complete)
+    monkeypatch.setattr(client, "complete", complete)
     return calls
