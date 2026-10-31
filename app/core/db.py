@@ -126,15 +126,13 @@ class Connection:
         import psycopg
         from pgvector.psycopg import register_vector as register_psycopg_vector
 
+        from app.repositories.acceptance import create_acceptance_schema
+
         self.direct = psycopg.connect(
             get_settings().database_url, autocommit=True
         )
-        try:
-            register_psycopg_vector(self.direct)
-        except psycopg.ProgrammingError:
-            logger.warning(
-                "vector_codec_skipped", reason="vector extension missing"
-            )
+        create_acceptance_schema(self.direct)
+        register_psycopg_vector(self.direct)
         return self.direct
 
     def __exit__(
