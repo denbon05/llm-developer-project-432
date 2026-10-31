@@ -530,7 +530,8 @@ def get_chunks_by_ids(
 ) -> dict[str, dict[str, Any]]:
     """Return the acceptance chunks with these ids, by id"""
     rows = conn.execute(
-        "SELECT id, doc_id, text, metadata, NULL FROM chunks WHERE id = ANY(%s)",
+        "SELECT id, doc_id, text, metadata, NULL FROM chunks "
+        "WHERE id = ANY(%s)",
         (chunk_ids,),
     ).fetchall()
     return {result["id"]: result for result in read_results(rows)}
