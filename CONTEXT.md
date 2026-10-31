@@ -8,162 +8,147 @@ verify in a minute instead of writing in an hour.
 ### Inputs
 
 - **Supplier document**: a file a supplier sends (product passport,
-  commercial offer, specification); untrusted input. _Avoid_: source file,
+  commercial offer, specification); untrusted. _Avoid_: source file,
   attachment.
 - **Supplier text**: plain text describing a product. _Avoid_: prompt, raw
   text.
-- **Supplier facts**: what the extractor found in supplier input: product
+- **Supplier facts**: what the extractor found in supplier text: product
   name, characteristics, missing fields. _Avoid_: extraction, parsed data.
 
 ### Documents
 
 - **Ingestion**: turning a supplier document into stored chunks. _Avoid_:
   import, upload processing.
-- **Chunk**: a piece of a supplier document that search returns and a card
-  draft cites. _Avoid_: fragment, passage, snippet.
-- **Section**: the part of a document under one heading; in a spreadsheet, a
-  sheet. _Avoid_: chapter, part.
+- **Chunk**: a piece of a document that search returns and a card draft
+  cites. _Avoid_: fragment, passage, snippet.
+- **Section**: the text under one heading; in a spreadsheet, a sheet.
+  _Avoid_: chapter, part.
 - **SKU**: a supplier's code for one product model. _Avoid_: article, part
   number.
-- **Brand**: the trade name a product is sold under, not the supplier
-  company. _Avoid_: manufacturer, vendor.
+- **Brand**: the trade name a product is sold under, not the supplier.
+  _Avoid_: manufacturer, vendor.
 
 ### Search
 
-- **Embedding**: a vector that stands for the meaning of a chunk or a query.
+- **Embedding**: the vector standing for a chunk's or a query's meaning.
   _Avoid_: encoding, vector (for the concept).
-- **Vector search**: finding chunks whose embeddings lie closest to the
-  query's. _Avoid_: semantic search, dense search.
-- **Keyword search**: finding chunks that contain every word of the query.
-  _Avoid_: full-text search, lexical search, FTS.
-- **Hybrid search**: vector and keyword search merged by rank, so a chunk both
-  find ranks higher. _Avoid_: combined search.
-- **Similarity threshold**: the lowest similarity at which vector search
-  accepts a chunk. _Avoid_: cutoff, relevance score.
-- **Reindex**: computing the embeddings that are missing or were made by
-  another model. _Avoid_: backfill, re-embedding.
+- **Vector**, **keyword** and **hybrid search**: by embedding similarity; by
+  every query word; both merged by rank. _Avoid_: semantic, dense,
+  full-text, lexical or combined search; FTS.
+- **Similarity threshold**: the lowest similarity vector search accepts.
+  _Avoid_: cutoff, relevance score.
+- **Reindex**: computing embeddings that are missing or from another model.
+  _Avoid_: backfill, re-embedding.
 
 ### Grounding
 
-- **Hint**: optional text in a generation request that names the target
-  product, such as a SKU. _Avoid_: query (search builds its query from the
-  hint), prompt.
-- **Source**: a chunk as the generator sees it, under a label unique within
-  the job (`S1`). _Avoid_: evidence, reference.
-- **Context**: the sources one job's generation and critique see, in label
-  order. _Avoid_: retrieved set.
-- **Context budget**: the most tokens the sources of a context may take.
+- **Hint**: optional text naming the target product, such as a SKU.
+  _Avoid_: query (search builds its query from it), prompt.
+- **Source**: a chunk as the generator sees it, labelled `S1`, `S2`… within
+  a job. _Avoid_: evidence, reference.
+- **Context**: a job's sources in label order; the **context budget** is the
+  most tokens they may take. _Avoid_: retrieved set.
 - **Citation**: a characteristic's reference to the label of a source that
   states its value. _Avoid_: link, quote.
 
 ### Output
 
-- **Card draft**: a generated product card; a draft until a human approves
+- **Card draft**: a generated product card, a draft until a human approves
   it. _Avoid_: card (unqualified), result, answer.
 - **Characteristic**: a named product property with a value from supplier
   input. _Avoid_: attribute, spec, feature.
-- **Missing field**: a characteristic the card needs but the supplier input
-  lacks; listed, never invented. _Avoid_: gap, unknown, null field.
-- **Standard field**: a field a buyer expects on any card: warranty, colour,
-  country of origin, package contents. Code lists one as missing when neither
-  the draft nor any source names it.
-- **SEO**: a card draft's meta title, meta description and keywords.
-  _Avoid_: metadata, SEO block (a block is a piece of a parsed document).
-- **Confidence**: the share of needed characteristics the supplier input
-  provides, from 0 to 1. _Avoid_: score, certainty.
+- **Missing field**: a characteristic the draft needs but the input lacks;
+  listed, never invented. Code lists a **standard field** (warranty, colour,
+  country of origin, package contents) that neither the draft nor any source
+  names. _Avoid_: gap, unknown, null field.
+- **SEO**: a draft's meta title, meta description and keywords. _Avoid_:
+  metadata, SEO block (a block is a piece of a parsed document).
+- **Confidence**: the share of needed characteristics the input provides,
+  0 to 1. _Avoid_: score, certainty.
 
-### Pipeline roles
+### Model roles
 
-- **Extractor**: the model role that turns supplier input into supplier
-  facts.
-- **Generator**: the model role that writes a card draft from supplier facts
-  or from sources. _Avoid_: writer.
-- **Critic**: the model role that checks a card draft against the supplier
-  facts or the sources. _Avoid_: reviewer, validator.
+- **Extractor**: turns supplier text into supplier facts.
+- **Generator**: writes a card draft from supplier facts or sources.
+  _Avoid_: writer.
+- **Critic**: checks a draft against the facts or the sources. _Avoid_:
+  reviewer, validator.
 - **Critique**: the critic's verdict (`pass` or `revise`) and issues, each
-  naming the source or draft field it concerns. _Avoid_: review, feedback
-  report.
-- **Revision**: another generation round after a `revise` verdict. _Avoid_:
-  retry, regeneration.
-- **Revision budget**: the maximum number of generation rounds for one card
-  draft.
-- **Injection detector**: the model role that decides whether a flagged chunk
-  is a prompt injection. _Avoid_: classifier, guard model.
+  naming the source or field it concerns. _Avoid_: review, feedback report.
+- **Revision**: another generation round after `revise`; the **revision
+  budget** caps the rounds. _Avoid_: retry, regeneration.
+- **Injection detector**: decides whether a flagged chunk is a prompt
+  injection. _Avoid_: classifier, guard model.
+- **Judge**: in evaluation only, decides whether the sources support each
+  claim of a draft. _Avoid_: grader, evaluator.
+- **Main model** runs the writing roles (extractor, generator); **cheap
+  model** the checking ones (critic, injection detector). _Avoid_: strong,
+  primary, small or secondary model.
 
 ### Invalid replies
 
 - **Output repair**: asking a role again for its whole reply, with the
   errors. _Avoid_: retry, regeneration.
-- **Field fix**: asking a role again for only the fields that broke
-  validation. _Avoid_: patch, partial regeneration.
-- **Repair budget**: the maximum number of output repairs and field fixes for
-  one extraction, generation or critique.
+- **Field fix**: asking again for only the fields that broke validation.
+  _Avoid_: patch, partial regeneration.
+- **Repair budget**: the most output repairs and field fixes, together, per
+  role call.
 
 ### Cost and evaluation
 
-- **Call ledger**: the record of every model call with its job, purpose,
-  model, tokens, cost and duration. _Avoid_: usage log, billing table.
-- **Call purpose**: what a model call is for: extract, generate, critique,
-  detect_injection or judge. _Avoid_: call type, label.
-- **Main model**: the model of the roles that write: the extractor and the
-  generator. _Avoid_: strong model, primary model.
-- **Cheap model**: the model of the roles that check: the critic and the
-  injection detector. _Avoid_: small model, secondary model.
-- **Reference case**: documents, an optional hint, and what their card draft
-  is expected to hold: characteristics with the places that state them, and
-  missing fields. _Avoid_: test case, sample.
-- **Reference set**: the reference cases that evaluation measures card drafts
-  against. _Avoid_: ground truth, benchmark.
-- **Evaluation run**: one pass over the reference set, or over its subset,
-  ending in a report. _Avoid_: benchmark run, test run.
-- **Judge**: the model role that, in evaluation only, decides for each claim
-  of a card draft whether the sources support it. _Avoid_: grader, evaluator.
-- **Claim**: a piece of a card draft that the judge checks on its own: the
-  title, a characteristic, a benefit or a sentence of the description.
-  _Avoid_: assertion, statement.
+- **Call ledger**: the record of every model call: job, purpose, model,
+  tokens, cost, duration. _Avoid_: usage log, billing table.
+- **Call purpose**: `extract`, `generate`, `critique`, `detect_injection` or
+  `judge`. _Avoid_: call type, label.
+- **Reference case**: documents, an optional hint, and what their draft
+  should hold. _Avoid_: test case, sample.
+- **Reference set**: the reference cases evaluation measures against.
+  _Avoid_: ground truth, benchmark.
+- **Evaluation run**: one pass over the reference set or its subset, ending
+  in a report. _Avoid_: benchmark run, test run.
+- **Claim**: a piece of a draft the judge checks alone: the title, a
+  characteristic, a benefit, a description sentence. _Avoid_: assertion,
+  statement.
 
 ### Guardrails
 
-- **Personal data**: phone numbers, emails, tax IDs and card numbers in
-  supplier input, whether a person's or a company's. _Avoid_: PII (in prose),
-  sensitive data.
+- **Personal data**: phone numbers, emails, tax IDs and card numbers, a
+  person's or a company's. _Avoid_: PII (in prose), sensitive data.
 - **Masking**: replacing personal data with placeholders before any model
   call. _Avoid_: redaction, anonymization.
-- **Placeholder**: the label that stands for one masked value within a job,
-  such as `[PHONE_1]`. _Avoid_: token, tag.
-- **Prompt injection**: text in a supplier document that tries to give the
-  model instructions. _Avoid_: jailbreak.
-- **Injection check**: checking a job's candidate chunks for prompt
-  injection, by patterns and then by the injection detector. _Avoid_:
-  screening, scanning, filtering.
-- **Injection pattern**: a named regex of text addressed to a model, such as
-  a role marker. _Avoid_: rule, signature.
-- **Flagged chunk**: a chunk in which the injection check found an injection
-  pattern. _Avoid_: suspicious chunk.
-- **Excluded chunk**: a chunk the injection check kept out of a job's
-  context. _Avoid_: dropped chunk, blocked chunk.
-- **Excluded document**: a document whose chunks are all kept out of a job's
-  context, because too many of them were excluded.
-- **Leak check**: checking a finished card draft for personal data,
-  placeholders and traces of instructions. _Avoid_: output filter, sanitizer.
+- **Placeholder**: the label for one masked value within a job, such as
+  `[PHONE_1]`. _Avoid_: token, tag.
+- **Prompt injection**: text in a supplier document that tries to instruct
+  the model. _Avoid_: jailbreak.
+- **Injection check**: checking a job's candidate chunks by injection
+  patterns, then by the injection detector. _Avoid_: screening, scanning,
+  filtering.
+- **Injection pattern**: a named regex of text addressed to a model.
+  _Avoid_: rule, signature.
+- **Flagged chunk**: a chunk with an injection pattern. _Avoid_: suspicious
+  chunk.
+- **Excluded chunk**: one the injection check kept out of a job's context;
+  an **excluded document** has all its chunks kept out. _Avoid_: dropped
+  chunk, blocked chunk.
+- **Leak check**: checking a finished draft for personal data, placeholders
+  and traces of instructions. _Avoid_: output filter, sanitizer.
 - **Guard report**: what masking, the injection check and the leak check did
   for one job. _Avoid_: security report, audit log.
 
 ### Jobs and decisions
 
-- **Job**: one request to produce a card draft, tracked until it reaches a
-  terminal status. _Avoid_: task, request.
-- **Supplier-text job**: a job whose input is supplier text; the extractor
-  turns it into supplier facts, and its card draft has no citations.
-- **Document job**: a job whose input is indexed supplier documents and an
-  optional hint; its card draft cites sources.
-- **Workflow**: the durable Temporal execution that carries out a job or an
-  ingestion. _Avoid_: process, pipeline run.
-- **Status**: a job's or a document's position in its lifecycle, as recorded
-  in the database. _Avoid_: state (for the stored value), phase.
-- **Decision**: a human's approval or rejection of a waiting card draft.
-  _Avoid_: review (as a verb for the model), verdict.
-- **Awaiting approval**: a draft the critic passed, with enough confidence,
-  waiting for a decision.
-- **Needs review**: a draft that ran out of revisions, lacks confidence, or
-  was touched by a guard, waiting for a decision. _Avoid_: rejected (reserved for a human rejection).
+- **Job**: one request for a card draft, tracked until a terminal status. A
+  **supplier-text job** starts from supplier text, uncited; a **document
+  job** from indexed documents and a hint, citing sources. _Avoid_: task,
+  request.
+- **Workflow**: the durable Temporal execution of a job or an ingestion.
+  _Avoid_: process, pipeline run.
+- **Status**: a job's or document's stored lifecycle position. _Avoid_:
+  state (for the stored value), phase.
+- **Decision**: a human's approval or rejection of a waiting draft. _Avoid_:
+  review (as a verb for the model), verdict.
+- **Awaiting approval**: a draft the critic passed, confident and untouched
+  by a guard, waiting for a decision.
+- **Needs review**: a draft out of revisions, short of confidence or touched
+  by a guard, waiting for a decision. _Avoid_: rejected (reserved for a
+  human rejection).

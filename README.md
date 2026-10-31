@@ -82,8 +82,8 @@ which counts a document job's source tokens
 `~/.cache/huggingface/`. Tests load neither.
 
 Prices per model live in `app/llm/cost.py`;
-[spec 08](docs/specs/08-cost-tracing-evaluation.md#settings) describes the
-model settings.
+[The observability spec](docs/specs/observability.md#model-roles) describes
+the model settings.
 
 ## Usage
 
@@ -98,8 +98,8 @@ curl -s localhost:8000/health/ready
 
 The API needs the database at startup; the worker needs Temporal, the
 embedding model and the tokenizer.
-[Spec 02](docs/specs/02-platform-foundation.md#behaviour) describes what
-happens when a dependency is down.
+[The platform spec](docs/specs/platform.md#failures) describes what happens
+when a dependency is down.
 
 ### Card drafts
 
@@ -111,8 +111,8 @@ curl -s localhost:8000/api/v1/jobs/<id>              # until awaiting_approval o
 curl -s -X POST localhost:8000/api/v1/jobs/<id>/approve
 ```
 
-[Spec 03](docs/specs/03-generation-pipeline.md#http-api) lists every job
-endpoint, rejection included.
+[The jobs spec](docs/specs/jobs.md#http-api) lists every job endpoint,
+rejection included.
 
 ### Documents and search
 
@@ -125,9 +125,9 @@ make search q="FAN-50"      # search the indexed documents
 make eval-search            # run the reference queries, write the report
 ```
 
-Specs [05](docs/specs/05-document-ingestion.md) and
-[06](docs/specs/06-embeddings-and-search.md) describe ingestion, search and
-the evaluation report.
+The [documents](docs/specs/documents.md), [search](docs/specs/search.md)
+and [evaluation](docs/specs/evaluation.md#search-evaluation) specs describe
+ingestion, search and the evaluation report.
 
 ### Card drafts from documents
 
@@ -152,8 +152,8 @@ Each characteristic of the job's `result` cites source labels, and the job's
              "section": "Specification", "text": "FAN-40: Brand VentBriz; …", …}]
 ```
 
-[Spec 07](docs/specs/07-grounded-generation.md) describes retrieval, the
-context and citation checks.
+[The grounded generation spec](docs/specs/grounded-generation.md) describes
+retrieval, the context and citation checks.
 
 Phone numbers, emails, tax IDs and card numbers never reach the model: they
 are replaced with placeholders such as `[PHONE_1]`, so a job's `sources` show
@@ -175,7 +175,7 @@ a placeholder or an instruction found in the draft) waits in `needs_review`
 even if the critic passed it, so a human sees what happened before deciding.
 To see it, upload `tests/fixtures/documents/kettle_manual_en.pdf`: its terms
 section carries a prompt injection.
-[Spec 09](docs/specs/09-guardrails.md) describes the guards.
+[The guardrails spec](docs/specs/guardrails.md) describes the guards.
 
 ### Cost and tracing
 
@@ -190,8 +190,8 @@ to `LLM_MODEL`, so locally every call shows one model, and the call
 `purpose` tells the roles apart; set a smaller model to see the split.
 
 Each response carries its request id in `X-Request-ID`.
-[Spec 08](docs/specs/08-cost-tracing-evaluation.md#tracing) describes the call
-ledger and the log events.
+[The observability spec](docs/specs/observability.md#tracing) describes the
+call ledger and the log events.
 
 ### Evaluation
 
@@ -205,8 +205,8 @@ evals/reports/generation_starter_<subset|full>.md. After the rollback they
 run evals/goldens/cards.json on evals/datasets/: the subset is 4 cases. -->
 
 It needs the API, the worker and the model server.
-[Spec 08](docs/specs/08-cost-tracing-evaluation.md#evaluation) describes the
-reference set, the metrics and the reports.
+[The evaluation spec](docs/specs/evaluation.md#generation-evaluation)
+describes the reference set, the metrics and the reports.
 
 ### Commands
 

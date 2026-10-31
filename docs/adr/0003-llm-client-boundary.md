@@ -27,5 +27,6 @@ the development default. The client is our policy for accessing the model:
 - **Two retry levels, never mixed.** The client retries a call. Temporal
   retries a step after a worker loss or a timeout, but it doesn't retry an
   `LlmUnavailableError`. Nothing retries the whole pipeline.
-- **Per-call cost and the choice between a cheap model and the main one** (08)
-  will live here, so no call site can skip them.
+- **Per-call cost and the choice between a cheap model and the main one**
+  live here ([observability](../specs/observability.md)), so no call site can
+  skip them.

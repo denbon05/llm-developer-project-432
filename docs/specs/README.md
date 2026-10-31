@@ -1,58 +1,35 @@
 # Specs
 
-This project uses spec-driven development: a step's spec is written and reviewed
-before any code for it. The spec is the source of truth. If an implementation
-has to deviate, the spec is updated in the same change.
+A spec is the source of truth for the behaviour and contracts of one area.
+Read the spec of the area you change before writing code; a change that
+deviates from it updates the spec in the same change.
 
-Architecture decisions live in [`docs/adr/`](../adr/). Domain vocabulary lives in
-[`CONTEXT.md`](../../CONTEXT.md).
+| Spec | Covers |
+|------|--------|
+| [Overview](overview.md) | problem, principles, system shape, module layout |
+| [Platform](platform.md) | Compose, settings, database, migrations, error kinds, health, worker, logging, tests, CI |
+| [Jobs](jobs.md) | job model, statuses, idempotency, the card generation workflow, decisions, the `/cards`, `/jobs` and `/generate` API |
+| [Card contract](card-contract.md) | card draft schema, validation, reading replies, repairs, confidence and routing, role prompts |
+| [Documents](documents.md) | upload, parsing, normalisation, chunking, document statuses, the ingestion workflow |
+| [Search](search.md) | embeddings, vector, keyword and hybrid search, the threshold, reindex |
+| [Grounded generation](grounded-generation.md) | context assembly, citations, the document generator and critic, standard missing fields |
+| [Guardrails](guardrails.md) | masking, injection check, prompt hardening, leak check, guard report |
+| [Observability](observability.md) | model roles, LLM client values, call ledger and cost, tracing, log events |
+| [Evaluation](evaluation.md) | evaluation documents, search and generation evaluation, reports |
 
-## Roadmap
+## Writing a spec
 
-| # | Spec | Scope | Status |
-|---|------|-------|--------|
-| 01 | [Product overview](01-product-overview.md) | Problem, promises, principles, system shape | accepted |
-| 02 | [Platform foundation](02-platform-foundation.md) | Postgres + pgvector, Temporal, migrations, pool, health, tests, CI | accepted |
-| 03 | [Generation pipeline](03-generation-pipeline.md) | LLM client, three-role pipeline, jobs, durable workflow, human approval | accepted |
-| 04 | [Structured output](04-structured-output.md) | Card contract, tolerant reading, output repair, field fixes, confidence routing, input language | implemented |
-| 05 | [Document ingestion](05-document-ingestion.md) | Upload, pdf/docx/xlsx parsing, normalisation, chunking, document status, ingestion workflow | implemented |
-| 06 | [Embeddings and search](06-embeddings-and-search.md) | Local embeddings, pgvector, vector, keyword and hybrid search, reindex, search evaluation | implemented |
-| 07 | [Grounded generation](07-grounded-generation.md) | Generation from documents, context assembly, citation verification, end-to-end flow | implemented |
-| 08 | [Cost, tracing, evaluation](08-cost-tracing-evaluation.md) | Call ledger, two-model policy, trace IDs, call purposes in logs, quality metrics, LLM judge | accepted |
-| 09 | [Guardrails](09-guardrails.md) | Personal-data masking, injection check, leak check, guard report | accepted |
-| 10 | Delivery | Clean-slate run, README, metrics report (no separate spec) | planned |
-
-Specs 04–09 are written just before their step starts, informed by what the
-earlier steps taught us.
-
-## Status values
-
-- **planned**: not written yet
-- **draft**: written, under review
-- **accepted**: reviewed; implementation may start
-- **implemented**: code merged and acceptance criteria verified
-
-## Specification structure
-
-A feature spec is a software design contract. It contains:
-
-1. **Context**: the problem and intended outcome.
-2. **Requirements**: numbered, externally meaningful, testable statements.
-3. **Non-goals**: scope deliberately deferred or excluded.
-4. **Design**: component flow, boundaries, interfaces, data and ownership.
-5. **Behaviour**: state transitions, invariants and failure semantics.
-6. **Verification**: each requirement traced to an automated or manual check.
-7. **Acceptance criteria**: a short, checkable definition of done.
-8. **Open questions**: unresolved design choices only.
-
-A spec describes behaviour and the contracts other parts rely on, not the code
-that implements them. It names something only when other code, tests, clients
-or operators depend on the name: modules from the layout, API and model fields,
-stored data, settings, log events, Temporal activities and queries, and error
-types that reach clients. A value that is a decision, such as a limit or a
-budget, is stated; the constant that holds it is not named. Internal functions
-and helpers are left to the code, so renaming one never changes a spec.
-
-Operational commands and examples belong in the root README. Decisions that
-need their alternatives and consequences preserved belong in `docs/adr/`.
-Specs may link to either instead of duplicating them.
+- Sections, empty ones skipped: **Purpose** · **Contracts** · **Behaviour** ·
+  **Failures** · **Tests**.
+- **Contracts** hold what other code, clients, operators or tests depend on:
+  API and model fields, stored data, settings, log events, Temporal
+  workflows, activities, signals and queries, errors that reach clients.
+  Anything else is named only when something depends on its name; a decided
+  value (limit, budget, threshold, timeout) is stated, but not the constant
+  holding it, so renaming internals never changes a spec.
+- A non-obvious rule gets its reason in one short clause. No history, worked
+  examples or run records: reports live in `evals/reports/`.
+- Commands and examples live in the root [README](../../README.md);
+  decisions with alternatives in [`docs/adr/`](../adr/); vocabulary in
+  [`CONTEXT.md`](../../CONTEXT.md). Specs link to them instead of repeating
+  them.

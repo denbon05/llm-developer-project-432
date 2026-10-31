@@ -2,15 +2,15 @@
 
 ## Workflow
 
-- Read the step's spec in `docs/specs/` before writing code for it. The spec
-  is the source of truth. If the code has to deviate, update the spec in the
-  same change.
+- Read the spec of the area you are changing in `docs/specs/` before writing
+  code. The spec is the source of truth. If the code has to deviate, update
+  the spec in the same change.
 - Respect the decisions in `docs/adr/`. Don't "fix" something an ADR explains.
   To change one, propose a new ADR.
 - Use the vocabulary in `CONTEXT.md` for code, logs and docs. Never use a word
   it lists under _Avoid_.
 - Keep module and directory names exactly as the layout in
-  `docs/specs/02-platform-foundation.md` defines them.
+  `docs/specs/overview.md` defines them.
 - When a change affects how the service is installed, configured or run, update
   the README's Installation and Usage sections in the same change.
 
@@ -46,6 +46,6 @@
 ## Git
 
 - One commit per step on `main`, with the message `feat: <title> (step NN)`.
-  The commit message references the step's spec.
+  The commit message names the specs it changes.
 - Commit messages use Conventional Commits.
 - Never edit or delete `.github/workflows/hexlet-check.yml`.
