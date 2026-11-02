@@ -16,3 +16,8 @@ migrations applied by dbmate, and queries through an asyncpg pool.
   fresh clone needs no global tools.
 - **One `DATABASE_URL`**, in plain `postgres://` form, serves both dbmate and
   asyncpg.
+- **Migrations run only through dbmate's CLI** (`make migrate-up`,
+  `make migrate-status`, `make migrate-rollback`, `make migration`). There is
+  no migration module in `app/`: a Python wrapper would only call the same
+  CLI, and the app never migrates at startup, so a schema change is always a
+  step someone runs on purpose.
