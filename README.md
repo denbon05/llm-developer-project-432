@@ -1,6 +1,6 @@
 # AI Product Card Generator
 
-[![CI](https://github.com/denbon05/llm-developer-project-432/actions/workflows/ci.yml/badge.svg)](https://github.com/denbon05/llm-developer-project-432/actions/workflows/ci.yml)
+[![CI](https://github.com/denbon05/product-card-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/denbon05/product-card-ai/actions/workflows/ci.yml)
 
 A backend service that turns supplier documents (PDF, DOCX, XLSX) into
 product card drafts for an online marketplace. It indexes the documents
@@ -70,8 +70,8 @@ Prerequisites:
   `LLM_JUDGE_MODEL`, when set, need the same window.
 
 ```bash
-git clone https://github.com/denbon05/llm-developer-project-432.git
-cd llm-developer-project-432
+git clone https://github.com/denbon05/product-card-ai.git
+cd product-card-ai
 cp .env.example .env    # defaults work locally
 make setup
 make infra              # stays in this terminal and streams logs
