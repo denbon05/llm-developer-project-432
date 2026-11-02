@@ -23,7 +23,7 @@ from app.services.documents import read_chunks
 from tests.fixtures import DOCUMENTS_DIR
 from tests.helpers.documents import read_document
 
-SCAN = "fan_passport_fan_45_scan.pdf"
+SCAN = "fan_passport_fan_45_scan_en.pdf"
 READABLE_FIXTURES = sorted(
     path.name for path in DOCUMENTS_DIR.iterdir() if path.name != SCAN
 )
@@ -53,7 +53,7 @@ def save_docx(document: Any) -> bytes:
 
 def test_pdf_reads_sections_page_by_page() -> None:
     """Chunks follow the passport's headings across its two pages"""
-    chunks = read_fixture("fan_passport_fan_40.pdf")
+    chunks = read_fixture("fan_passport_fan_40_en.pdf")
 
     placement = [
         (chunk.metadata["page"], chunk.metadata["section"])
@@ -74,14 +74,14 @@ def test_pdf_reads_sections_page_by_page() -> None:
 
 def test_pdf_drops_running_header() -> None:
     """The company line repeated on both pages reaches no chunk"""
-    chunks = read_fixture("fan_passport_fan_40.pdf")
+    chunks = read_fixture("fan_passport_fan_40_en.pdf")
 
     assert not any("opt@domteh.example" in chunk.text for chunk in chunks)
 
 
 def test_pdf_drops_numbered_footer() -> None:
     """The footer differs only by page number and is still removed"""
-    chunks = read_fixture("coffee_passport_cfe_1000.pdf")
+    chunks = read_fixture("coffee_passport_cfe_1000_ru.pdf")
 
     placement = {
         (chunk.metadata["page"], chunk.metadata["section"]) for chunk in chunks
@@ -93,14 +93,14 @@ def test_pdf_drops_numbered_footer() -> None:
 
 def test_single_page_pdf_keeps_company_line() -> None:
     """Nothing repeats in a one-page document, so its company line stays"""
-    chunks = read_fixture("fan_kp_2.pdf")
+    chunks = read_fixture("fan_kp_2_en.pdf")
 
     assert find_chunk(chunks, "DomTekh LLC · opt@domteh.example")
 
 
 def test_xlsx_row_names_every_column() -> None:
     """Each spreadsheet row is one chunk that carries its column headers"""
-    chunks = read_fixture("fan_spec_1.xlsx")
+    chunks = read_fixture("fan_spec_1_en.xlsx")
 
     fan_40 = find_chunk(chunks, "FAN-40")
 
@@ -119,7 +119,7 @@ def test_xlsx_row_names_every_column() -> None:
 
 def test_xlsx_keeps_documented_power_apart_from_sku() -> None:
     """The number in VCS-180 is not its power"""
-    chunks = read_fixture("vacuum_spec_1.xlsx")
+    chunks = read_fixture("vacuum_spec_1_en.xlsx")
 
     assert "Power 500 W" in find_chunk(chunks, "VCS-180").text
 

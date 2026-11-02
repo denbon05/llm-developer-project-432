@@ -10,11 +10,12 @@ the diff of a committed report.
 
 ### Evaluation documents (`evals/datasets/`)
 
-Supplier documents under their original names; an English copy of a Russian
-original has an `_en` suffix. The set keeps contacts in their exact formats,
-PDFs with running headers, spreadsheets with the header row first and SKUs
-intact, an incomplete passport, SKUs whose numbers aren't characteristics
-(`VCS-180` has a power of `500 W`), Russian originals and a prompt injection
+Supplier documents, each file name ending in its language, `_en` or `_ru`
+(`blender_kp_en.docx` is a translation of `blender_kp_ru.docx`). The set
+keeps contacts in their exact formats, PDFs with running headers,
+spreadsheets with the header row first and SKUs intact, an incomplete
+passport, SKUs whose numbers aren't characteristics (`VCS-180` has a power
+of `500 W`), Russian originals and a prompt injection
 (`kettle_manual_en.pdf`). Tests keep their own copies; a local bulk set goes
 to the git-ignored `data/bulk/`.
 
@@ -44,10 +45,10 @@ to the git-ignored `data/bulk/`.
 
 ```json
 {"subset": ["fan-40-en", "blender-800-ru", "coffee-1000-ru", "kettle-1700-en"],
- "cases": [{"id": "fan-40-en", "documents": ["fan_passport_fan_40.pdf", "fan_spec_1.xlsx"],
+ "cases": [{"id": "fan-40-en", "documents": ["fan_passport_fan_40_en.pdf", "fan_spec_1_en.xlsx"],
             "hint": "FAN-40",
             "characteristics": [{"names": ["Power", "Rated power"], "values": ["40 W"],
-                                 "where": [{"file": "fan_spec_1.xlsx", "page": 1, "sku": "FAN-40"}]}],
+                                 "where": [{"file": "fan_spec_1_en.xlsx", "page": 1, "sku": "FAN-40"}]}],
             "missing_fields": [], "forbidden_texts": []}]}
 ```
 
@@ -119,7 +120,3 @@ metric; average cost, time and rounds), Cases (one row each, with Result,
 Quality, Missing fields and Cost · time columns), Errors (each problem per
 case) and Cost by model. Tables are padded Markdown. Output varies between
 runs, so compare totals.
-
-TODO(acceptance): `make eval-generation` currently runs the starter set in
-`data/` (`data/golden_cards.json` via `evals/starter_set.py`) into
-`generation_starter_<subset|full>.md`; roll back to the reference set above.

@@ -16,6 +16,7 @@ from uuid import UUID
 
 import httpx
 from evals.costs import build_ledger_table, format_cost
+from evals.dataset_files import DATASETS_DIR
 from evals.expected_chunks import ExpectedChunk, is_expected_chunk
 from evals.ingest import (
     DEFAULT_API_URL,
@@ -24,7 +25,6 @@ from evals.ingest import (
     wait_for_documents,
 )
 from evals.judge import Claim, ClaimVerdict, judge_claims, split_into_claims
-from evals.starter_set import STARTER_DIR, read_starter_set
 from evals.tables import format_table
 from pydantic import BaseModel
 
@@ -114,8 +114,6 @@ class ReferenceSet(BaseModel):
 
     subset: list[str]
     cases: list[ReferenceCase]
-    # TODO(acceptance): documents whose ingestion must fail
-    rejected_documents: list[str] = []
 
 
 class SourcePlace(NamedTuple):
@@ -592,26 +590,12 @@ def build_errors(outcomes: list[CaseOutcome]) -> list[str]:
     return lines
 
 
-# TODO(acceptance)
-def build_rejections(rejections: dict[str, str]) -> list[str]:
-    """Return the section on the documents whose ingestion must fail"""
-    return [
-        "## Documents that must be rejected",
-        "",
-        *(f"- {name}: {outcome}" for name, outcome in rejections.items()),
-        "",
-    ]
-
-
 def build_report(
     scope: str,
     case_count: int,
     outcomes: list[CaseOutcome],
     model_calls: list[ModelCalls],
     settings: Settings,
-    # TODO(acceptance): the set's name in the title, and the rejections
-    set_name: str,
-    rejections: dict[str, str],
 ) -> str:
     """Return the evaluation report as Markdown"""
     models = dict.fromkeys(
@@ -625,7 +609,7 @@ def build_report(
     command = "make eval-generation" + (" full=1" if scope == FULL else "")
     totals = add_up([outcome.score for outcome in outcomes])
     lines = [
-        f"# Generation evaluation: {set_name}, {scope}",
+        f"# Generation evaluation: {scope}",
         "",
         (
             f"- Date: {datetime.now(UTC).date()} · "
@@ -652,7 +636,6 @@ def build_report(
         "",
         *build_cases_table(outcomes),
         "",
-        *(build_rejections(rejections) if rejections else []),
         *build_errors(outcomes),
         "",
         "## Cost by model",
@@ -704,13 +687,13 @@ async def check_workers() -> None:
 
 
 def index_documents(
-    client: httpx.Client, cases: list[ReferenceCase], documents_dir: Path
+    client: httpx.Client, cases: list[ReferenceCase]
 ) -> dict[str, UUID]:
     """Upload the cases' documents, wait until each is indexed, and return
     their ids by file name
     """
     paths = [
-        documents_dir / name
+        DATASETS_DIR / name
         for name in sorted({name for case in cases for name in case.documents})
     ]
     document_ids, failures = upload_documents(client, paths)
@@ -732,31 +715,6 @@ def index_documents(
             f"documents not indexed: {', '.join(not_indexed)}"
         )
     return {path.name: documents[path].id for path in paths}
-
-
-# TODO(acceptance)
-def check_rejections(
-    client: httpx.Client, names: list[str], documents_dir: Path
-) -> dict[str, str]:
-    """Upload the documents that must be rejected; return how each ended"""
-    paths = [documents_dir / name for name in names]
-    document_ids, failures = upload_documents(client, paths)
-    documents, status_failures = wait_for_documents(client, document_ids)
-    failures |= status_failures
-    if failures:
-        raise RunStoppedError(
-            "; ".join(
-                f"{path.name}: {error}" for path, error in failures.items()
-            )
-        )
-    return {
-        path.name: (
-            f"rejected as expected ({documents[path].error})"
-            if documents[path].status == DocumentStatus.FAILED
-            else f"NOT rejected: {documents[path].status}"
-        )
-        for path in paths
-    }
 
 
 async def wait_for_job(client: httpx.Client, job_id: UUID) -> dict[str, Any]:
@@ -884,12 +842,12 @@ async def evaluate_case(
 
 
 async def evaluate_cases(
-    client: httpx.Client, cases: list[ReferenceCase], documents_dir: Path
+    client: httpx.Client, cases: list[ReferenceCase]
 ) -> list[CaseOutcome]:
     """Run each case through the API, one after another, and measure it"""
     check_api(client)
     await check_workers()
-    document_ids = index_documents(client, cases, documents_dir)
+    document_ids = index_documents(client, cases)
     filenames = {
         document_id: name for name, document_id in document_ids.items()
     }
@@ -915,12 +873,9 @@ async def run_evaluation() -> int:
     logging.getLogger("httpx").setLevel(logging.WARNING)
     arguments = parse_arguments()
     scope = FULL if arguments.full else SUBSET
-    # TODO(acceptance): the starter set instead of REFERENCE_SET_PATH on
-    # DATASETS_DIR, in the report generation_starter_<scope>.md
-    reference_set = ReferenceSet.model_validate(read_starter_set())
-    documents_dir = STARTER_DIR
-    set_name = "starter set"
-    report_name = f"generation_starter_{scope}.md"
+    reference_set = ReferenceSet.model_validate_json(
+        REFERENCE_SET_PATH.read_bytes()
+    )
     cases = [
         case
         for case in reference_set.cases
@@ -932,10 +887,7 @@ async def run_evaluation() -> int:
         with httpx.Client(
             base_url=arguments.api_url, timeout=REQUEST_TIMEOUT_S
         ) as client:
-            outcomes = await evaluate_cases(client, cases, documents_dir)
-            rejections = check_rejections(
-                client, reference_set.rejected_documents, documents_dir
-            )
+            outcomes = await evaluate_cases(client, cases)
         model_calls = await llm_calls_repository.count_calls_by_model(
             [outcome.job_id for outcome in outcomes]
         )
@@ -946,16 +898,10 @@ async def run_evaluation() -> int:
     finally:
         await db.close_pool()
     report = build_report(
-        scope,
-        len(reference_set.cases),
-        outcomes,
-        model_calls,
-        settings,
-        set_name,
-        rejections,
+        scope, len(reference_set.cases), outcomes, model_calls, settings
     )
     REPORTS_DIR.mkdir(exist_ok=True)
-    report_path = REPORTS_DIR / report_name
+    report_path = REPORTS_DIR / f"generation_{scope}.md"
     report_path.write_text(report)
     totals = add_up([outcome.score for outcome in outcomes])
     print()

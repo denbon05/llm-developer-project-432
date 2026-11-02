@@ -78,7 +78,7 @@ it nor the embedding model, so documents get no synchronous preview.
 ### Prompts
 
 Sources go in tags with named fields, left out when missing, `"` escaped:
-`<source id="S1" file="fan_spec_1.xlsx" page="1" section="Specification">…</source>`.
+`<source id="S1" file="fan_spec_1_en.xlsx" page="1" section="Specification">…</source>`.
 
 - **Generator:** `Product: <product line>`, the sources, and in a revision
   the previous draft and issues. Only the sources; each characteristic cites

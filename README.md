@@ -23,7 +23,7 @@ TODO(acceptance): roll back once the project is accepted, in this order:
    set's evaluation, so that make eval-generation runs
    evals/goldens/cards.json on evals/datasets/ again.
 3. Name the Russian copies explicitly, as the English ones carry _en:
-   coffee_passport_cfe_1000.pdf becomes coffee_passport_cfe_1000_ru.pdf in
+   coffee_passport_cfe_1000_ru.pdf becomes coffee_passport_cfe_1000_ru.pdf in
    evals/datasets/ and tests/fixtures/documents/, with every reference to
    it (goldens, tests, specs). Then run make check.
 4. Rerun make eval-search, make eval-generation and make eval-generation
@@ -125,7 +125,7 @@ rejection included.
 
 ```bash
 curl -s -X POST localhost:8000/api/v1/documents \
-  -F 'file=@evals/datasets/fan_passport_fan_40.pdf'
+  -F 'file=@evals/datasets/fan_passport_fan_40_en.pdf'
 curl -s localhost:8000/api/v1/documents/<id>         # until indexed or failed
 make ingest                 # upload every document in evals/datasets/
 make search q="FAN-50"      # search the indexed documents
@@ -155,7 +155,7 @@ Each characteristic of the job's `result` cites source labels, and the job's
 
 ```text
 "result": {"characteristics": {"Power": {"value": "40 W", "sources": ["S1"]}}, …}
-"sources": [{"label": "S1", "filename": "fan_spec_1.xlsx", "page": 1,
+"sources": [{"label": "S1", "filename": "fan_spec_1_en.xlsx", "page": 1,
              "section": "Specification", "text": "FAN-40: Brand VentBriz; …", …}]
 ```
 
@@ -203,13 +203,9 @@ call ledger and the log events.
 ### Evaluation
 
 ```bash
-make eval-generation          # the subset: 2 cases
+make eval-generation          # the subset: 4 cases
 make eval-generation full=1   # every case
 ```
-
-<!-- TODO(acceptance): both run the starter set in data/ and write
-evals/reports/generation_starter_<subset|full>.md. After the rollback they
-run evals/goldens/cards.json on evals/datasets/: the subset is 4 cases. -->
 
 It needs the API, the worker and the model server.
 [The evaluation spec](docs/specs/evaluation.md#generation-evaluation)

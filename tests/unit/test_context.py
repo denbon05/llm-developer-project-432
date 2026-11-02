@@ -224,11 +224,11 @@ def test_source_over_the_budget_left_is_skipped() -> None:
 
 @pytest.mark.parametrize(
     ("section", "title"),
-    [("VentBriz 40 Fan", "VentBriz 40 Fan"), (None, "fan_passport_fan_40")],
+    [("VentBriz 40 Fan", "VentBriz 40 Fan"), (None, "fan_passport_fan_40_en")],
     ids=["section", "file name"],
 )
 def test_title_is_the_first_section_or_the_file_name(
     section: str | None, title: str
 ) -> None:
     """Without a section, the title is the file name without extension"""
-    assert choose_title(section, "fan_passport_fan_40.pdf") == title
+    assert choose_title(section, "fan_passport_fan_40_en.pdf") == title

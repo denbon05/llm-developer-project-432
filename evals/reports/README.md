@@ -7,7 +7,6 @@ the starter-set numbers below with our reference set's (README step 6). -->
 |--------|------------------|
 | [`search_en.md`](search_en.md), [`search_ru.md`](search_ru.md) | Search quality on `evals/datasets/`: rank of the answering chunk per mode, recall@5, the similarity threshold's window |
 | [`generation_subset.md`](generation_subset.md), [`generation_full.md`](generation_full.md) | Card drafts against our reference set, `evals/goldens/cards.json` |
-| [`generation_starter_subset.md`](generation_starter_subset.md), [`generation_starter_full.md`](generation_starter_full.md) | Card drafts against the starter supplier documents in `data/` and their reference |
 
 Each run is one try per case on a small local model
 (`gemma-4-e4b-it-mlx`), so compare totals, not single cases.

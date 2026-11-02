@@ -118,7 +118,7 @@ def test_check_upload_refuses_long_name_first() -> None:
         ),
         (
             DocumentFormat.PDF,
-            (DOCUMENTS_DIR / "fan_passport_fan_45_scan.pdf").read_bytes(),
+            (DOCUMENTS_DIR / "fan_passport_fan_45_scan_en.pdf").read_bytes(),
             NO_TEXT_LAYER_REASON,
         ),
     ],
@@ -200,7 +200,7 @@ async def test_ingestion_logs_hold_no_chunk_text(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     """Logs of chunking carry counts, never the text of a chunk"""
-    path = DOCUMENTS_DIR / "fan_kp_2.pdf"
+    path = DOCUMENTS_DIR / "fan_kp_2_en.pdf"
     stored = stub_stored_document(monkeypatch, path)
     # Library logs too, at the level the service logs at
     caplog.set_level(MIN_LOG_LEVEL)
@@ -223,7 +223,7 @@ async def test_unreadable_document_logs_its_reason(
 ) -> None:
     """An unreadable document logs why, and stores no chunks"""
     stored = stub_stored_document(
-        monkeypatch, DOCUMENTS_DIR / "fan_passport_fan_45_scan.pdf"
+        monkeypatch, DOCUMENTS_DIR / "fan_passport_fan_45_scan_en.pdf"
     )
     document_id = uuid4()
 

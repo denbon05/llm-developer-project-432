@@ -12,14 +12,14 @@
     "query": "Какой объём у колбы кофеварки?",
     "kind": "characteristic",
     "expected": [
-      {"file": "coffee_passport_cfe_1000.pdf", "page": 1, "section": "Технические характеристики"}
+      {"file": "coffee_passport_cfe_1000_ru.pdf", "page": 1, "section": "Технические характеристики"}
     ]
   },
   {
     "query": "Сколько чашек кофе готовит кофеварка за раз?",
     "kind": "characteristic",
     "expected": [
-      {"file": "coffee_passport_cfe_1000.pdf", "page": 1, "section": "Кофеварка капельная «КофеАрт 1000»"}
+      {"file": "coffee_passport_cfe_1000_ru.pdf", "page": 1, "section": "Кофеварка капельная «КофеАрт 1000»"}
     ]
   },
   {
@@ -33,21 +33,21 @@
     "query": "Как часто чистить кофеварку от накипи?",
     "kind": "characteristic",
     "expected": [
-      {"file": "coffee_passport_cfe_1000.pdf", "page": 2, "section": "Правила эксплуатации"}
+      {"file": "coffee_passport_cfe_1000_ru.pdf", "page": 2, "section": "Правила эксплуатации"}
     ]
   },
   {
     "query": "Что входит в комплект кофеварки?",
     "kind": "characteristic",
     "expected": [
-      {"file": "coffee_passport_cfe_1000.pdf", "page": 2, "section": "Комплект поставки"}
+      {"file": "coffee_passport_cfe_1000_ru.pdf", "page": 2, "section": "Комплект поставки"}
     ]
   },
   {
     "query": "CFE-1000",
     "kind": "sku",
     "expected": [
-      {"file": "coffee_passport_cfe_1000.pdf", "page": 1, "section": "Технические характеристики"}
+      {"file": "coffee_passport_cfe_1000_ru.pdf", "page": 1, "section": "Технические характеристики"}
     ]
   },
   {

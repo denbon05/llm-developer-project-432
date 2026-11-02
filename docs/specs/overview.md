@@ -60,7 +60,7 @@ app/
 db/migrations/     dbmate migrations; no migration module
 evals/             evaluation commands, goldens/, datasets/, reports/
 tests/             unit/, integration/, helpers/, fixtures/documents/
-data/              local document sets; data/bulk/ is git-ignored
+data/bulk/         local document sets, git-ignored
 ```
 
 `core/bootstrap.py` sets up logging and settings for the API, the worker and

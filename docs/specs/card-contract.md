@@ -53,10 +53,6 @@ invalid after 2 repairs (<errors joined by "; ">)`: 502 for a preview, the
 
 Why coverage is computed in code: [ADR 0011](../adr/0011-confidence-computed-in-code.md).
 
-TODO(acceptance): until the rollback, a `CardDraft` given a `confidence`
-uses it instead of the computed one, and `Critique` also accepts `approve`
-and `regenerate` for `pass` and `revise`.
-
 - `confidence = characteristics / (characteristics + missing_fields)` on the
   validated draft, two decimals, 0 when both are empty. It is not in the
   generator's schema, a value the model sends is ignored, and drafts shown to

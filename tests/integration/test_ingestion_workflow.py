@@ -32,7 +32,7 @@ from tests.helpers.seeds import read_embeddings
 
 TASK_QUEUE = "test-document-ingestion"
 STUB_CHUNK_COUNT = 5
-PASSPORT = "fan_passport_fan_40.pdf"
+PASSPORT = "fan_passport_fan_40_en.pdf"
 # Its five sections (tests/unit/test_parsers.py)
 PASSPORT_CHUNK_COUNT = 5
 
@@ -229,7 +229,7 @@ async def test_workflow_fails_stored_scan(
     temporal_env: WorkflowEnvironment,
 ) -> None:
     """A stored scan ends failed with the reason, and without chunks"""
-    document_id = await store_fixture("fan_passport_fan_45_scan.pdf")
+    document_id = await store_fixture("fan_passport_fan_45_scan_en.pdf")
 
     with pytest.raises(WorkflowFailureError):
         await run_workflow(
