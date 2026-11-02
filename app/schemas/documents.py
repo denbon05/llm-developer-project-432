@@ -9,10 +9,6 @@ from app.schemas.cards import NonBlankText
 
 SEARCH_DEFAULT_TOP_K = 5
 SEARCH_MAX_TOP_K = 50
-# TODO(acceptance): joins a table row's cells in a block's content
-TABLE_CELL_SEPARATOR = " | "
-TEXT_BLOCK_KIND = "text"
-TABLE_BLOCK_KIND = "table"
 
 
 class DocumentFormat(StrEnum):
@@ -97,17 +93,6 @@ class TextBlock(BaseModel):
     section: str | None
     lines: list[str]
 
-    # TODO(acceptance): the text and kind the external acceptance tests read
-    @property
-    def content(self) -> str:
-        """Return the block's lines as one text"""
-        return "\n".join(self.lines)
-
-    @property
-    def kind(self) -> str:
-        """Return the block's kind"""
-        return TEXT_BLOCK_KIND
-
 
 class TableRow(BaseModel):
     """A table row's cells and the row number a person sees"""
@@ -123,20 +108,6 @@ class TableBlock(BaseModel):
     section: str | None
     headers: list[str]
     rows: list[TableRow]
-
-    # TODO(acceptance): the text and kind the external acceptance tests read
-    @property
-    def kind(self) -> str:
-        """Return the block's kind"""
-        return TABLE_BLOCK_KIND
-
-    @property
-    def content(self) -> str:
-        """Return the headers and rows as lines of cells"""
-        return "\n".join(
-            TABLE_CELL_SEPARATOR.join(cells)
-            for cells in [self.headers, *(row.cells for row in self.rows)]
-        )
 
 
 ParsedBlock = TextBlock | TableBlock
@@ -165,9 +136,6 @@ class ChunkMetadata(TypedDict):
     row: NotRequired[int]
     sku: NotRequired[str]
     brand: NotRequired[str]
-    # TODO(acceptance): set only for the external acceptance tests
-    doc_id: NotRequired[str]
-    articul: NotRequired[str]
 
 
 class Chunk(BaseModel):
@@ -175,26 +143,6 @@ class Chunk(BaseModel):
 
     text: str
     metadata: ChunkMetadata
-
-    # TODO(acceptance): the names the external acceptance tests read
-    @property
-    def content(self) -> str:
-        """Return the chunk's text"""
-        return self.text
-
-    @property
-    def section(self) -> str | None:
-        """Return the section the chunk sits in"""
-        return self.metadata["section"]
-
-    @property
-    def page(self) -> int:
-        """Return the page the chunk sits on"""
-        return self.metadata["page"]
-
-    def __getitem__(self, key: str) -> Any:
-        """Return the field by name, as a mapping would"""
-        return getattr(self, key)
 
 
 class ChunkText(NamedTuple):

@@ -177,12 +177,7 @@ def build_metadata(
     return metadata
 
 
-def chunk_blocks(
-    blocks: list[ParsedBlock],
-    # TODO(acceptance): the external acceptance tests pass a document id
-    # and read it from the metadata.
-    document_id: str | None = None,
-) -> list[Chunk]:
+def chunk_blocks(blocks: list[ParsedBlock]) -> list[Chunk]:
     """Return the blocks' chunks in reading order, each text once"""
     chunks: list[Chunk] = []
     seen_texts: set[str] = set()
@@ -193,8 +188,7 @@ def chunk_blocks(
             continue
         seen_texts.add(text)
         # Numbered after duplicates are dropped, so positions have no gaps
-        metadata = build_metadata(len(chunks), block, row)
-        if document_id is not None:
-            metadata["doc_id"] = document_id
-        chunks.append(Chunk(text=text, metadata=metadata))
+        chunks.append(
+            Chunk(text=text, metadata=build_metadata(len(chunks), block, row))
+        )
     return chunks

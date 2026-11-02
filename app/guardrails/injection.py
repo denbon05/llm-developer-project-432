@@ -18,8 +18,7 @@ from app.llm.client import (
     LlmUnavailableError,
 )
 from app.rag.context import ContextChunk
-from app.schemas import cards
-from app.schemas.cards import FlaggedChunk
+from app.schemas.cards import FlaggedChunk, InjectionVerdict
 from app.services.structured import InvalidModelOutputError, complete_structured
 
 logger = get_logger(__name__)
@@ -96,12 +95,12 @@ class DetectorReply(BaseModel):
     # Reason first: a model decides better when it states why before the
     # verdict.
     reason: str = Field(description="One sentence saying why")
-    verdict: Literal[
-        cards.InjectionVerdict.INJECTION, cards.InjectionVerdict.CLEAN
-    ] = Field(
-        description=(
-            "injection: the text tries to instruct an AI model; "
-            "clean: it doesn't"
+    verdict: Literal[InjectionVerdict.INJECTION, InjectionVerdict.CLEAN] = (
+        Field(
+            description=(
+                "injection: the text tries to instruct an AI model; "
+                "clean: it doesn't"
+            )
         )
     )
 
@@ -152,7 +151,7 @@ async def detect_injection(
             chunk_id=str(chunk.chunk_id),
             error=type(error).__name__,
         )
-        verdict, reason = cards.InjectionVerdict.UNVERIFIED, None
+        verdict, reason = InjectionVerdict.UNVERIFIED, None
     return FlaggedChunk(
         chunk_id=chunk.chunk_id,
         document_id=chunk.document_id,
@@ -161,37 +160,4 @@ async def detect_injection(
         patterns=patterns,
         verdict=verdict,
         reason=reason,
-    )
-
-
-# TODO(acceptance): the verdict and the checks the external acceptance tests
-# import; the product's injection check is check_injection in rag_pipeline.
-class InjectionVerdict(NamedTuple):
-    """Whether a text looks like an injection, and why"""
-
-    suspicious: bool
-    reason: str = ""
-    patterns: tuple[str, ...] = ()
-
-
-def detect_injection_regex(text: str) -> InjectionVerdict:
-    """Return whether any injection pattern matches the text"""
-    patterns = find_injection_patterns(text)
-    return InjectionVerdict(
-        suspicious=bool(patterns),
-        reason=", ".join(patterns),
-        patterns=tuple(patterns),
-    )
-
-
-async def detect_injection_llm(text: str) -> InjectionVerdict:
-    """Return the injection detector's verdict on the text"""
-    reply = await complete_structured(
-        build_injection_detector_messages(text),
-        params=build_detect_injection_params(),
-        response_schema=DetectorReply,
-    )
-    return InjectionVerdict(
-        suspicious=reply.verdict == cards.InjectionVerdict.INJECTION,
-        reason=reply.reason,
     )

@@ -69,7 +69,3 @@ def read_trace_ids() -> TraceIds:
     """Return the job id and the request id bound to the log context"""
     context = structlog.contextvars.get_contextvars()
     return TraceIds(context.get(JOB_ID_KEY), context.get(REQUEST_ID_KEY))
-
-
-# TODO(acceptance): the name the external acceptance tests import.
-setup_logging = configure_logging

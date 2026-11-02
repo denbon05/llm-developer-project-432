@@ -6,13 +6,7 @@ import pdfplumber
 
 from app.core.errors import UnreadableDocumentError
 from app.parsers.blocks import build_blocks
-from app.schemas.documents import (
-    HeadedLine,
-    ParsedBlock,
-    ParsedDocument,
-    TableBlock,
-    TableRow,
-)
+from app.schemas.documents import HeadedLine, ParsedDocument
 
 UNREADABLE_PDF_REASON = "the file is not a readable PDF"
 NO_TEXT_LAYER_REASON = (
@@ -68,7 +62,7 @@ def read_lines(content: bytes) -> tuple[list[PdfLine], int]:
     return lines, page_count
 
 
-def read_pdf(content: bytes) -> ParsedDocument:
+def parse_pdf(content: bytes) -> ParsedDocument:
     """Return the text blocks of a PDF, page by page"""
     lines, page_count = read_lines(content)
     if not lines:
@@ -85,31 +79,3 @@ def read_pdf(content: bytes) -> ParsedDocument:
         ),
         page_count=page_count,
     )
-
-
-# TODO(acceptance): the name the external acceptance tests import.
-PdfNoTextLayer = UnreadableDocumentError
-
-
-# TODO(acceptance): the name the external acceptance tests import; it returns
-# the blocks alone.
-def parse_pdf(content: bytes) -> list[ParsedBlock]:
-    """Return the blocks read from the file, then its tables as table blocks"""
-    blocks = read_pdf(content).blocks
-    with pdfplumber.open(io.BytesIO(content)) as pdf:
-        for page_number, page in enumerate(pdf.pages, start=1):
-            for table in page.extract_tables():
-                rows = [[cell or "" for cell in row] for row in table]
-                blocks.append(
-                    TableBlock(
-                        page=page_number,
-                        section=None,
-                        headers=rows[0],
-                        # The header row too: the tests count every row.
-                        rows=[
-                            TableRow(number=number, cells=cells)
-                            for number, cells in enumerate(rows, start=1)
-                        ],
-                    )
-                )
-    return blocks

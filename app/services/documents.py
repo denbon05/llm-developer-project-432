@@ -14,10 +14,10 @@ from app.core.errors import (
 )
 from app.core.logging import get_logger
 from app.parsers.chunker import chunk_blocks
-from app.parsers.docx import read_docx
+from app.parsers.docx import parse_docx
 from app.parsers.normalizer import normalize_blocks
-from app.parsers.pdf import read_pdf
-from app.parsers.xlsx import read_xlsx
+from app.parsers.pdf import parse_pdf
+from app.parsers.xlsx import parse_xlsx
 from app.rag import embedder
 from app.repositories import chunks as chunks_repository
 from app.repositories import documents as documents_repository
@@ -46,9 +46,9 @@ ARCHIVE_TOO_LARGE_REASON = (
 )
 NO_TEXT_REASON = "the document contains no text"
 PARSERS: dict[DocumentFormat, Callable[[bytes], ParsedDocument]] = {
-    DocumentFormat.PDF: read_pdf,
-    DocumentFormat.DOCX: read_docx,
-    DocumentFormat.XLSX: read_xlsx,
+    DocumentFormat.PDF: parse_pdf,
+    DocumentFormat.DOCX: parse_docx,
+    DocumentFormat.XLSX: parse_xlsx,
 }
 MS_PER_S = 1000
 
@@ -235,16 +235,3 @@ async def embed_document(document_id: UUID) -> int:
         duration_ms=round((time.perf_counter() - started) * MS_PER_S),
     )
     return chunk_count
-
-
-# TODO(acceptance): the name the external acceptance tests import.
-def parse_to_chunks(
-    content: bytes, document_format: str, document_id: str
-) -> list[Chunk]:
-    """Return the file's chunks"""
-    chunks, _ = read_chunks(DocumentFormat(document_format), content)
-    for chunk in chunks:
-        chunk.metadata["doc_id"] = document_id
-        if "sku" in chunk.metadata:
-            chunk.metadata["articul"] = chunk.metadata["sku"]
-    return chunks

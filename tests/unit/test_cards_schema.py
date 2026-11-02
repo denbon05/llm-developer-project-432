@@ -47,9 +47,6 @@ OPTIONAL_FIELDS = {
     ("SupplierFacts", "missing_fields"),
     ("CardDraft", "seo"),
     ("CardDraft", "missing_fields"),
-    # TODO(acceptance): the two fields the external acceptance tests add
-    ("CardDraft", "reported_confidence"),
-    ("CardDraft", "sources"),
 }
 WRITTEN_FIELDS = [
     (schema, data, field)
@@ -300,11 +297,9 @@ def test_confidence_is_the_share_of_found_characteristics(
     assert draft.confidence == confidence
 
 
-# TODO(acceptance): the grounded draft keeps this rule; a supplier-text
-# draft takes a given confidence until the rollback, then use CardDraft here.
 def test_confidence_sent_by_the_model_is_ignored() -> None:
     """Confidence is computed by code, whatever the reply says"""
-    draft = validate_with(GroundedCardDraft, GROUNDED_DRAFT, confidence=0.99)
+    draft = validate_with(CardDraft, DRAFT, confidence=0.99)
 
     assert draft.confidence == 0.5
 

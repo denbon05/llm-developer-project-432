@@ -187,18 +187,3 @@ def normalize_blocks(
         for block in cleaned
     ]
     return [block for block in joined if has_content(block)]
-
-
-# TODO(acceptance): the names the external acceptance tests import.
-def clean_text(text: str) -> str:
-    """Return the text normalised onto one line, with words hyphenated across
-    a line break joined
-    """
-    return normalize_inline(
-        " ".join(join_hyphenated_lines(normalize_lines([text])))
-    )
-
-
-def normalize(blocks: list[ParsedBlock]) -> list[ParsedBlock]:
-    """Return the blocks normalised as a PDF's are"""
-    return normalize_blocks(blocks, should_remove_running_headers=True)

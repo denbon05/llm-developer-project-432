@@ -1,4 +1,3 @@
-import app.llm.client
 from app.agents.prompts import (
     CRITIC_MAX_TOKENS,
     CRITIC_TEMPERATURE,
@@ -27,9 +26,6 @@ from app.schemas.cards import (
 from app.services.structured import complete_structured
 
 MAX_GENERATION_ATTEMPTS = 3
-# TODO(acceptance): the name the external acceptance tests substitute; the
-# calls themselves go through services.structured.
-run_agent = app.llm.client.run_agent
 
 logger = get_logger(__name__)
 
@@ -123,9 +119,7 @@ async def critique(facts: SupplierFacts, draft: CardDraft) -> Critique:
     return reply
 
 
-async def preview_card(
-    supplier_text: str, max_attempts: int = MAX_GENERATION_ATTEMPTS
-) -> CardPreview:
+async def preview_card(supplier_text: str) -> CardPreview:
     """Return a card draft made within the revision budget"""
     # Extraction runs once: the facts don't change because the critic
     # disliked a title. The loop is repeated on purpose in
@@ -136,7 +130,9 @@ async def preview_card(
     # model_construct skips the check that a revise verdict lists issues.
     last_critique = Critique.model_construct(verdict="revise")
     attempts = 0
-    while last_critique.verdict == "revise" and attempts < max_attempts:
+    while (
+        last_critique.verdict == "revise" and attempts < MAX_GENERATION_ATTEMPTS
+    ):
         attempts += 1
         draft = await generate(facts, last_critique.issues, draft)
         last_critique = await critique(facts, draft)
@@ -163,31 +159,4 @@ async def preview_card(
             masked_counts=mask_texts([supplier_text]).counts,
             leaks=draft_leaks,
         ),
-    )
-
-
-# TODO(acceptance): the pipeline API the external acceptance tests call,
-# in their names: a passed draft is "done", one the critic still rejects
-# after the last round is "rejected", any other waits in "needs_review".
-TEST_VERDICTS = {"pass": "approved", "revise": "rejected"}
-TEST_DONE = "done"
-TEST_REJECTED = "rejected"
-
-
-async def run_pipeline(
-    supplier_text: str, max_attempts: int = MAX_GENERATION_ATTEMPTS
-) -> tuple[CardDraft, int, str, str]:
-    """Return the card draft, its rounds, the last verdict and its status"""
-    preview = await preview_card(supplier_text, max_attempts)
-    if preview.verdict == "revise":
-        status = TEST_REJECTED
-    elif preview.status == "awaiting_approval":
-        status = TEST_DONE
-    else:
-        status = preview.status
-    return (
-        preview.card,
-        preview.attempts,
-        TEST_VERDICTS[preview.verdict],
-        status,
     )

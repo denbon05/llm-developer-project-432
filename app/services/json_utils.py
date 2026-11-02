@@ -43,8 +43,3 @@ def read_json_object(reply: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise JsonReadError(NOT_AN_OBJECT)
     return value
-
-
-# TODO(acceptance): the names the external acceptance tests import.
-LLMJsonError = JsonReadError
-parse_llm_json = read_json_object

@@ -6,13 +6,11 @@ from uuid import UUID
 from pydantic import (
     AfterValidator,
     BaseModel,
-    BeforeValidator,
     ConfigDict,
     Field,
     computed_field,
     model_validator,
 )
-from pydantic.json_schema import SkipJsonSchema
 from pydantic_core import PydanticCustomError
 
 CARD_TITLE_MAX_LENGTH = 100
@@ -222,28 +220,6 @@ class Seo(BaseModel):
     )
     keywords: TextList = Field(default=[], description="3-8 search keywords")
 
-    # TODO(acceptance): the names the external acceptance tests read
-    @property
-    def title(self) -> str:
-        """Return the meta title"""
-        return self.meta_title
-
-    @property
-    def description(self) -> str:
-        """Return the meta description"""
-        return self.meta_description
-
-
-# TODO(acceptance): a reference to the chunk a value comes from, as the
-# external acceptance tests' cards cite them
-class SourceRef(BaseModel):
-    """A reference to the chunk a value comes from"""
-
-    chunk_id: str
-    doc_id: str = ""
-    page: int | None = None
-    score: float | None = None
-
 
 class CardDraft(BaseModel):
     """A generated product card draft"""
@@ -272,38 +248,15 @@ class CardDraft(BaseModel):
         )
         return self
 
-    # TODO(acceptance): a confidence the external acceptance tests pass in
-    # replaces the computed one; the schema sent to the model leaves it out.
-    reported_confidence: SkipJsonSchema[float | None] = Field(
-        default=None, ge=0, le=1, alias="confidence", exclude=True
-    )
-    # TODO(acceptance): the chunks the external acceptance tests' cards cite;
-    # the schema sent to the model and the API output leave them out.
-    sources: SkipJsonSchema[list[SourceRef]] = Field(default=[], exclude=True)
-
     # Computed, so it is not in the schema the generator receives, and a
     # value the model sends is ignored.
     @computed_field
     @property
     def confidence(self) -> float:
         """Return the share of needed characteristics the draft provides"""
-        computed = compute_confidence(
+        return compute_confidence(
             len(self.characteristics), len(self.missing_fields)
         )
-        if self.reported_confidence is None:
-            return computed
-        return self.reported_confidence
-
-    @model_validator(mode="after")
-    def drop_echoed_confidence(self) -> Self:
-        """Drop a reported confidence equal to the computed one"""
-        # A draft read back from its own JSON carries its computed confidence.
-        computed = compute_confidence(
-            len(self.characteristics), len(self.missing_fields)
-        )
-        if self.reported_confidence == computed:
-            self.reported_confidence = None
-        return self
 
 
 class CitedValue(BaseModel):
@@ -363,21 +316,10 @@ class GroundedCardDraft(BaseModel):
         )
 
 
-# TODO(acceptance): the verdict names the external acceptance tests use
-VERDICT_SYNONYMS = {"approve": "pass", "regenerate": "revise"}
-
-
-def read_verdict(value: Any) -> Any:
-    """Return the verdict with a synonym replaced by our name"""
-    return (
-        VERDICT_SYNONYMS.get(value, value) if isinstance(value, str) else value
-    )
-
-
 class Critique(BaseModel):
     """The critic's verdict on a card draft and the issues it found"""
 
-    verdict: Annotated[Verdict, BeforeValidator(read_verdict)] = Field(
+    verdict: Verdict = Field(
         description="pass: the draft is ready; revise: it needs another round"
     )
     issues: list[str] = Field(
@@ -464,7 +406,3 @@ class CardRequest(BaseModel):
     """Supplier text to turn into a card draft"""
 
     supplier_text: SupplierText
-
-
-# TODO(acceptance): the name the external acceptance tests import.
-CritiqueReport = Critique

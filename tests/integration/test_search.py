@@ -66,7 +66,7 @@ async def search_by_vector(request: SearchRequest) -> list[SearchResult]:
 
 async def search_hybrid(request: SearchRequest) -> list[SearchResult]:
     """Run hybrid search with the test model, prefix and threshold"""
-    return await chunks_repository.search_by_rank_fusion(
+    return await chunks_repository.search_hybrid(
         request,
         QUERY_VECTOR,
         min_similarity=THRESHOLD,

@@ -29,7 +29,7 @@ async def search(request: SearchRequest) -> list[SearchResult]:
         search_with_vector = (
             chunks_repository.search_by_vector
             if request.mode == SearchMode.VECTOR
-            else chunks_repository.search_by_rank_fusion
+            else chunks_repository.search_hybrid
         )
         results = await search_with_vector(
             request,
