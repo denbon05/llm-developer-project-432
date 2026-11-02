@@ -1,8 +1,6 @@
 # AI Product Card Generator
 
-
 [![CI](https://github.com/denbon05/llm-developer-project-432/actions/workflows/ci.yml/badge.svg)](https://github.com/denbon05/llm-developer-project-432/actions/workflows/ci.yml)
-[![hexlet-check](https://github.com/denbon05/llm-developer-project-432/actions/workflows/hexlet-check.yml/badge.svg)](https://github.com/denbon05/llm-developer-project-432/actions)
 
 A backend service that turns supplier documents (PDF, DOCX, XLSX) into
 product card drafts for an online marketplace. It indexes the documents
@@ -12,8 +10,6 @@ it isn't sure of to a human. Personal data is masked before any model call,
 prompt injections in documents stay out of the context, and every model
 call is costed and traced. Quality is measured against reference cards:
 see the [evaluation reports](evals/reports/README.md).
-
-A Hexlet learning project: https://ru.hexlet.io/programs/llm-developer
 
 <!--
 TODO(acceptance): roll back once the project is accepted, in this order:
@@ -232,15 +228,3 @@ and the weakest metric are in [evals/reports](evals/reports/README.md).
 | `make migration name=<slug>` | create a migration file |
 | `make lint` / `make typecheck` / `make test` | run ruff / basedpyright / pytest |
 | `make check` | run lint, typecheck and test |
----
-
-<details>
-<summary>Hexlet automated tests</summary>
-
-Tests run on every commit. They are started by `.github/workflows/hexlet-check.yml` — do not delete or rename that file or the repository.
-
-</details>
-
-## About Hexlet
-
-[Hexlet](https://ru.hexlet.io/) is a programming school: original learning programs with practice, mentor support, and real projects that stay on your résumé. This repository is one of those projects.

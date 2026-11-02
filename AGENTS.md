@@ -13,6 +13,8 @@
   `docs/specs/overview.md` defines them.
 - When a change affects how the service is installed, configured or run, update
   the README's Installation and Usage sections in the same change.
+- The README is for people: what the service does, installation and usage.
+  Temporary and operational notes go in `docs/`.
 
 ## Architecture
 
@@ -45,7 +47,4 @@
 
 ## Git
 
-- One commit per step on `main`, with the message `feat: <title> (step NN)`.
-  The commit message names the specs it changes.
 - Commit messages use Conventional Commits.
-- Never edit or delete `.github/workflows/hexlet-check.yml`.
