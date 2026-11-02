@@ -11,38 +11,6 @@ prompt injections in documents stay out of the context, and every model
 call is costed and traced. Quality is measured against reference cards:
 see the [evaluation reports](evals/reports/README.md).
 
-<!--
-TODO(acceptance): roll back once the project is accepted, in this order:
-1. Delete data/ (the starter supplier documents, checked byte for byte) and
-   the starter set's reports, evals/reports/generation_starter_*.md.
-2. Undo every spot that `git grep "TODO(acceptance)"` finds: the starter
-   set's evaluation, so that make eval-generation runs
-   evals/goldens/cards.json on evals/datasets/ again.
-3. Name the Russian copies explicitly, as the English ones carry _en:
-   coffee_passport_cfe_1000_ru.pdf becomes coffee_passport_cfe_1000_ru.pdf in
-   evals/datasets/ and tests/fixtures/documents/, with every reference to
-   it (goldens, tests, specs). Then run make check.
-4. Rerun make eval-search, make eval-generation and make eval-generation
-   full=1: the committed reports predate the standard missing fields, the
-   source-label rule of the document generator, the kettle-1700-en case and
-   the grouped Cases table. kettle_manual_en.pdf joined evals/datasets/, so
-   if the search report's threshold window moved, recalibrate (ADR 0008).
-   Compare the full run with the committed generation_full.md (58/74
-   matched, 4/19 truly missing listed): on the starter set those two changes
-   lifted matched from 0.56 to 0.70 and truly missing listed from 1/5 to
-   5/5; if our set drops instead, look at the prompt rule first.
-5. Update evals/reports/README.md with the new numbers, then delete this
-   comment.
-Keep: make setup, the Seo and chunk_blocks names, the _en suffix of the
-English copies, ADR 0008, the client-facing failure messages, the standard
-missing fields, the source-label rule, the forbidden-text and cited-text
-checks of the evaluation, and the 60-character supplier-text title, the SEO
-and missing-field defaults with blank SEO texts and the preview_card name:
-they were decided to stay and sit outside the reverted commit, which leaves
-them.
--->
-
-
 ## Stack
 
 - Python, FastAPI, asyncpg

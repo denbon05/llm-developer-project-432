@@ -1,8 +1,5 @@
 # Evaluation reports
 
-<!-- TODO(acceptance): after the rollback, rerun the evaluations and replace
-the starter-set numbers below with our reference set's (README step 6). -->
-
 | Report | What it measures |
 |--------|------------------|
 | [`search_en.md`](search_en.md), [`search_ru.md`](search_ru.md) | Search quality on `evals/datasets/`: rank of the answering chunk per mode, recall@5, the similarity threshold's window |
@@ -11,54 +8,51 @@ the starter-set numbers below with our reference set's (README step 6). -->
 Each run is one try per case on a small local model
 (`gemma-4-e4b-it-mlx`), so compare totals, not single cases.
 
-## Latest run: the starter documents, every case
+## Latest full run
 
 | Metric | Value |
 |--------|-------|
-| Characteristics matched | 19/27 (0.70) |
-| Correct citations (by quoted text) | 3/3 |
-| Claims supported (LLM judge) | 58/63 (0.92) |
-| Truly missing fields listed | 5/5 |
+| Characteristics matched | 59/83 (0.71) |
+| Wrong values | 0 |
+| Correct citations | 59/59 |
+| Claims supported (LLM judge) | 126/131 (0.96) |
+| Truly missing fields listed | 10/21 (0.48) |
 | Cards without injected or personal text | 2/2 |
-| Per card | $0.0013 · 1 min 5 s · 1.8 rounds |
+| Per card | $0.0010 · 48 s · 1.6 rounds |
 
-**Cost per card.** About 5,400 input and 1,100 output tokens over
-generation, critique and the injection check. The price is the one set in
+Hybrid search finds an answering chunk in the top 5 for every query, 12/12
+in English and 8/8 in Russian. The similarity threshold, 0.795, still sits
+between the highest unrelated query (0.794) and the lowest answer (0.807).
+
+**Cost per card.** About 4,000 input and 800 output tokens over generation,
+critique and the injection check. The price is the one set in
 `app/llm/cost.py` for the local model ($0.20 per 1M tokens either way), so
 the dollar figure is notional; multiply the tokens by a hosted model's
 price to compare. `make costs job=<id>` gives one card's calls.
 
-| Document | Result |
-|----------|--------|
-| `blender_passport.pdf` | `awaiting_approval`, 10/12 characteristics, every claim supported |
-| `blender_kp.docx` | the manager's phone, email and tax ID masked, none in the card; a price list of three models (see below) |
-| `kettle_manual.pdf` (prompt injection) | the injected chunk excluded, `needs_review`, no injected price or contact in the card, 9/9 characteristics |
-| `kettle_spec.xlsx` (incomplete spec) | warranty, colour and country listed as missing, confidence 0.6, `needs_review` |
-| `boiler_scan.pdf` (scan) | rejected: no text layer, OCR not supported |
+## The weakest metric: truly missing fields listed (0.48)
 
-## The weakest metric: characteristics matched (0.70)
+A field the documents don't give should appear in the draft's missing
+fields, so a human sees what to ask the supplier for.
 
-Three causes, in order of weight:
+1. **Fields specific to a product type.** Code adds the fields any buyer
+   expects (warranty, colour, country of origin, package contents) when
+   neither the draft nor a source names them. The rest is up to the model:
+   for a fan's commercial offer the reference expects blade diameter,
+   speeds, oscillation and a sleep timer, and the draft listed 3 of 10.
+2. **A placeholder instead of a missing field.** One draft wrote "Power
+   supply: Not specified" as a characteristic. Code drops blank values, but
+   placeholder words depend on the language, so only the prompt forbids
+   them, and a small model sometimes ignores it.
 
-1. **Documents that cover several models.** The reference expects one card
-   for the whole series, a characteristic per SKU, for `blender_kp.docx`
-   and `kettle_spec.xlsx`. The service writes a card for one product: all
-   six of these characteristics count as absent. Naming the product as the
-   job's hint (a SKU) gives the right card for that product; a series card
-   is a different product decision.
-2. **Strict names.** A characteristic counts only under the reference's
-   name. The generator now keeps the label its source gives ("Питание",
-   not "Напряжение питания"), which lifted this metric from 15/27 to 19/27.
-3. **A small model's variance.** Names and values drift between runs
-   ("24 месяца с даты продажи" where the reference says "24 месяца").
+Before the standard missing fields this metric was 4/19.
 
-The previous weakest metric, truly missing fields listed (1/5), is now 5/5:
-code adds the fields a buyer expects (warranty, colour, country of origin,
-package contents) when neither the draft nor any source names them, so an
-incomplete spec no longer looks complete.
+## Characteristics matched (0.71)
 
-## Our reference set
-
-[`generation_full.md`](generation_full.md) holds the last full run on our
-English set before this round of changes: 58/74 characteristics, every
-citation correct, 4/19 truly missing fields listed.
+- **A small model's variance.** `coffee-1000-ru` matched 13/14 in the subset
+  run and 5/14 in the full run, from the same five chunks: the second draft
+  left out nine characteristics its context held. With the subset's draft
+  the total is 67/83 (0.81).
+- **Strict names.** A characteristic counts only under the reference's
+  name; most other misses are Model and SKU, which the reference lists as
+  characteristics and the drafts leave out.
