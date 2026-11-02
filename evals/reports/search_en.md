@@ -4,7 +4,7 @@
 - Query prefix: `query: `
 - Chunk prefix: `passage: `
 - Similarity threshold: 0.795
-- Data: 9 indexed documents of evals/datasets/, 43 chunks
+- Data: 10 indexed documents of evals/datasets/, 46 chunks
 
 Written by `make eval-search`. Ranks are positions within the top 20, with the threshold on; `-` means not found. Similarities are measured with the threshold off.
 
@@ -51,7 +51,7 @@ How many chunks each mode returns with the threshold on, and the top chunk's sim
 
 | Query | Vector | Keyword | Hybrid | Top-1 vector similarity | Above threshold |
 |-------|--------|---------|--------|-------------------------|-----------------|
-| smartphone screen resolution | 0 | 0 | 0 | 0.774 | no |
+| smartphone screen resolution | 0 | 0 | 0 | 0.776 | no |
 | weather in Paris tomorrow | 0 | 0 | 0 | 0.739 | no |
 | chocolate cake recipe | 0 | 0 | 0 | 0.772 | no |
 | How do I renew my car insurance? | 0 | 0 | 0 | 0.794 | no |

@@ -4,7 +4,7 @@
 - Query prefix: `query: `
 - Chunk prefix: `passage: `
 - Similarity threshold: 0.795
-- Data: 9 indexed documents of evals/datasets/, 43 chunks
+- Data: 10 indexed documents of evals/datasets/, 46 chunks
 
 Written by `make eval-search lang=ru`. Ranks are positions within the top 20, with the threshold on; `-` means not found. Similarities are measured with the threshold off.
 
