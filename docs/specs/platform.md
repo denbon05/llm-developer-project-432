@@ -13,6 +13,9 @@ worker process, logging and test setup every area builds on.
 - `temporal`: `temporalio/temporal:1.9.1` `server start-dev` on 7233 (UI
   8233), its SQLite history on a named volume so it survives restarts,
   `temporal operator cluster health`.
+- Host ports come from `POSTGRES_PORT`, `TEMPORAL_PORT` and
+  `TEMPORAL_UI_PORT` in `.env`, defaulting to the ports above; Compose reads
+  them, the app reads only `DATABASE_URL` and `TEMPORAL_ADDRESS`.
 
 ### Settings
 

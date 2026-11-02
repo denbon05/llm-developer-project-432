@@ -78,6 +78,10 @@ make infra              # stays in this terminal and streams logs
 make migrate-up         # in a second terminal
 ```
 
+If a port is taken, set `POSTGRES_PORT`, `TEMPORAL_PORT` or
+`TEMPORAL_UI_PORT` in `.env`, and put a changed Postgres or Temporal port in
+`DATABASE_URL` or `TEMPORAL_ADDRESS` too.
+
 The first `make worker` downloads the embedding model (about 1.1 GB) into
 `.cache/models/`, and the default tokenizer (about 30 MB),
 which counts a document job's source tokens
