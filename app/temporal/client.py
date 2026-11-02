@@ -16,6 +16,7 @@ from temporalio.service import RPCError, RPCStatusCode
 from app.core.config import get_settings
 from app.core.errors import NotFoundError, UnavailableError
 from app.core.logging import get_logger
+from app.guardrails.pii import mask_texts
 from app.schemas.documents import DocumentWorkflowInput
 from app.schemas.jobs import (
     CardWorkflowInput,
@@ -150,6 +151,10 @@ async def start_card_workflow(
 ) -> None:
     """Start the job's workflow unless it already exists"""
     settings = get_settings()
+    # Temporal keeps the input in its history: masked, it shows what the
+    # model reads, and personal data stays in the database.
+    if supplier_text is not None:
+        [supplier_text] = mask_texts([supplier_text]).texts
     client = await get_temporal_client()
     try:
         await client.start_workflow(

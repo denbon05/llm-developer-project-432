@@ -82,8 +82,9 @@ states why before deciding. Only code sets `unverified`.
    `services/jobs.py`, so the human sees what the model saw; stored chunks
    keep their text, and no mapping back to a value is kept
    ([ADR 0010](../adr/0010-masking-on-read.md)). Supplier text
-   stays as sent in the payload and Temporal history; source text never
-   enters Temporal.
+   stays as sent in the payload; the workflow input carries it masked, since
+   Temporal keeps the input in its history. Source text never enters
+   Temporal.
 
 ### Injection check
 

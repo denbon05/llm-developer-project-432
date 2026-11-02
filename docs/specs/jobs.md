@@ -52,7 +52,8 @@ card generation workflow, decisions, and the `/cards`, `/jobs` and
 ### Workflow
 
 `CardGenerationWorkflow`, ID `card-job-{job_id}`, on `TEMPORAL_TASK_QUEUE`.
-Input `CardWorkflowInput`: `job_id`; exactly one of `supplier_text` and
+Input `CardWorkflowInput`: `job_id`; exactly one of `supplier_text`
+(masked, as [guardrails](guardrails.md#masking) describes) and
 `document_ids` (with `hint`); `confidence_threshold`, set from settings at
 the start. Signals `approve` and `reject` (`{"reason"}`); query `get_state`
 (`status`, `attempt`, `is_decided`).
